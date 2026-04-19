@@ -30,6 +30,7 @@ from typing import Generator, List, Optional
 
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 # ---------------------------------------------------------------------------
@@ -360,3 +361,11 @@ def create_blocker(payload: BlockerCreate) -> dict:
         ).fetchone()
 
     return dict(blocker)
+
+
+# ---------------------------------------------------------------------------
+# Frontend Static Files
+# ---------------------------------------------------------------------------
+
+app.mount("/", StaticFiles(directory=str(BASE_DIR / "frontend"), html=True), name="frontend")
+
