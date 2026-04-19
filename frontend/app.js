@@ -2,6 +2,13 @@
 
 document.addEventListener('DOMContentLoaded', () => {
     fetchProjects();
+
+    const btnExport = document.getElementById('btn-export');
+    if (btnExport) {
+        btnExport.addEventListener('click', () => {
+            window.open('/api/v1/reports/export', '_blank');
+        });
+    }
 });
 
 async function fetchProjects() {

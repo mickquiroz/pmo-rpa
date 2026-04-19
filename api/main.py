@@ -22,6 +22,8 @@ Fecha  : 2026-04-18
 
 from __future__ import annotations
 
+import csv
+import io
 import sqlite3
 from contextlib import contextmanager
 from datetime import date
@@ -30,6 +32,7 @@ from typing import Generator, List, Optional
 
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -363,6 +366,48 @@ def create_blocker(payload: BlockerCreate) -> dict:
         ).fetchone()
 
     return dict(blocker)
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/reports/export
+# ---------------------------------------------------------------------------
+
+
+@app.get(
+    f"{API_PREFIX}/reports/export",
+    tags=["Reports"],
+    summary="Exporta el estado de los proyectos en formato CSV",
+)
+def export_projects_csv():
+    """Genera un archivo CSV en memoria con el progreso de los proyectos."""
+    with get_db() as conn:
+        rows = conn.execute(_PROGRESS_QUERY).fetchall()
+        
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Escribir cabeceras
+    writer.writerow(["ID", "Proceso", "Desarrollador", "Estado de Salud", "Fecha Inicio", "Fecha Fin", "Avance (%)"])
+    
+    # Escribir datos
+    for row in rows:
+        progress_pct = round(row["progress_percentage"], 2)
+        writer.writerow([
+            row["id"],
+            row["process_name"],
+            row["developer_name"],
+            row["health_status"],
+            row["start_date"],
+            row["estimated_end_date"],
+            f"{progress_pct}%"
+        ])
+    
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]), 
+        media_type="text/csv", 
+        headers={"Content-Disposition": 'attachment; filename="pmo_rpa_report.csv"'}
+    )
 
 
 # ---------------------------------------------------------------------------
