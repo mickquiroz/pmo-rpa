@@ -144,6 +144,22 @@ class PhaseUpdate(BaseModel):
     )
 
 
+class PhaseDatesUpdate(BaseModel):
+    """Payload para que la PMO actualice las fechas de la fase."""
+
+    start_date: str
+    estimated_end_date: str
+
+
+class ProjectCreate(BaseModel):
+    """Payload para inyectar nuevos proyectos y generar fases en cascada."""
+
+    process_name: str = Field(..., min_length=2)
+    assigned_developer_id: int = Field(..., gt=0)
+    start_date: str
+    estimated_end_date: str
+
+
 class BlockerCreate(BaseModel):
     """Payload para crear un nuevo blocker."""
 
@@ -203,7 +219,7 @@ SELECT
         ), 0.0
     )                                             AS progress_percentage
 FROM Projects  p
-JOIN Developers d  ON  d.id  = p.developer_id
+JOIN Users d  ON  d.id  = p.assigned_developer_id
 LEFT JOIN Phases ph ON ph.project_id = p.id
 GROUP BY
     p.id,
@@ -408,6 +424,104 @@ def export_projects_csv():
         media_type="text/csv", 
         headers={"Content-Disposition": 'attachment; filename="pmo_rpa_report.csv"'}
     )
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/projects
+# ---------------------------------------------------------------------------
+
+
+@app.post(
+    f"{API_PREFIX}/projects",
+    response_model=ProjectResponse,
+    tags=["Projects"],
+    summary="Crea un proyecto y autogenera sus 4 fases RPA",
+    status_code=status.HTTP_201_CREATED,
+)
+def create_project(payload: ProjectCreate) -> dict:
+    """
+    Inserta un nuevo proyecto.
+    Valida que assigned_developer_id corresponda a un usuario con rol 'Developer'.
+    Luego inserta en cascada las 4 fases: Discovery, Design, Development, UAT.
+    """
+    with get_db() as conn:
+        # Validar developer
+        dev = conn.execute(
+            "SELECT id, role FROM Users WHERE id = ? AND is_active = 1",
+            (payload.assigned_developer_id,)
+        ).fetchone()
+        
+        if not dev:
+            raise HTTPException(status_code=404, detail="Developer no encontrado o inactivo.")
+        if dev["role"] != "Developer":
+            raise HTTPException(status_code=400, detail="El usuario asignado no tiene rol 'Developer'.")
+
+        # Insertar proyecto
+        cursor = conn.execute(
+            """
+            INSERT INTO Projects (process_name, assigned_developer_id, start_date, estimated_end_date, health_status)
+            VALUES (?, ?, ?, ?, 'Green')
+            """,
+            (payload.process_name, payload.assigned_developer_id, payload.start_date, payload.estimated_end_date)
+        )
+        project_id = cursor.lastrowid
+
+        # Insertar 4 fases por defecto
+        # Se asumen fechas genéricas, luego la PMO puede hacer un PUT a fechas (o se calculan solapadas)
+        phases_data = [
+            (project_id, "Discovery", 10, payload.start_date, payload.estimated_end_date),
+            (project_id, "Design", 30, payload.start_date, payload.estimated_end_date),
+            (project_id, "Development", 40, payload.start_date, payload.estimated_end_date),
+            (project_id, "UAT", 20, payload.start_date, payload.estimated_end_date),
+        ]
+
+        conn.executemany(
+            """
+            INSERT INTO Phases (project_id, phase_name, weight_percentage, status, start_date, estimated_end_date)
+            VALUES (?, ?, ?, 'Pending', ?, ?)
+            """,
+            phases_data
+        )
+        conn.commit()
+
+        # Recuperar proyecto creado con progress_percentage
+        row = conn.execute(
+            _PROGRESS_QUERY.replace("ORDER BY p.id;", "HAVING p.id = ?;")
+        , (project_id,)).fetchone()
+        
+        if not row:
+            # Fallback
+            row = conn.execute("SELECT * FROM Projects WHERE id = ?", (project_id,)).fetchone()
+
+    return dict(row)
+
+# ---------------------------------------------------------------------------
+# PUT /api/v1/phases/{phase_id}/dates
+# ---------------------------------------------------------------------------
+
+
+@app.put(
+    f"{API_PREFIX}/phases/{{phase_id}}/dates",
+    response_model=PhaseResponse,
+    tags=["Phases"],
+    summary="Actualiza start_date y estimated_end_date de una fase",
+    status_code=status.HTTP_200_OK,
+)
+def update_phase_dates(phase_id: int, payload: PhaseDatesUpdate) -> dict:
+    with get_db() as conn:
+        phase = conn.execute("SELECT id FROM Phases WHERE id = ?", (phase_id,)).fetchone()
+        if not phase:
+            raise HTTPException(status_code=404, detail="Fase no encontrada.")
+
+        conn.execute(
+            "UPDATE Phases SET start_date = ?, estimated_end_date = ? WHERE id = ?",
+            (payload.start_date, payload.estimated_end_date, phase_id)
+        )
+        conn.commit()
+
+        updated = conn.execute("SELECT * FROM Phases WHERE id = ?", (phase_id,)).fetchone()
+
+    return dict(updated)
 
 
 # ---------------------------------------------------------------------------

@@ -32,26 +32,27 @@ DB_PATH  = DB_DIR / "pmo_rpa.db"
 # DDL — Data Definition Language
 # ---------------------------------------------------------------------------
 
-DDL_DEVELOPERS = """
-CREATE TABLE IF NOT EXISTS Developers (
+DDL_USERS = """
+CREATE TABLE IF NOT EXISTS Users (
     id        INTEGER PRIMARY KEY AUTOINCREMENT,
     name      TEXT    NOT NULL,
     email     TEXT    NOT NULL UNIQUE,
-    is_active INTEGER NOT NULL DEFAULT 1  -- 1 = True, 0 = False (SQLite bool)
+    role      TEXT    NOT NULL CHECK(role IN ('Admin', 'PMO', 'Developer')),
+    is_active INTEGER NOT NULL DEFAULT 1
 );
 """
 
 DDL_PROJECTS = """
 CREATE TABLE IF NOT EXISTS Projects (
-    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
-    process_name       TEXT    NOT NULL,
-    developer_id       INTEGER NOT NULL,
-    start_date         TEXT    NOT NULL,          -- formato ISO-8601: YYYY-MM-DD
-    estimated_end_date TEXT    NOT NULL,          -- formato ISO-8601: YYYY-MM-DD
-    health_status      TEXT    NOT NULL DEFAULT 'Green'
-                                CHECK(health_status IN ('Green', 'Yellow', 'Red')),
+    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+    process_name          TEXT    NOT NULL,
+    assigned_developer_id INTEGER NOT NULL,
+    start_date            TEXT    NOT NULL,          -- formato ISO-8601: YYYY-MM-DD
+    estimated_end_date    TEXT    NOT NULL,          -- formato ISO-8601: YYYY-MM-DD
+    health_status         TEXT    NOT NULL DEFAULT 'Green'
+                                   CHECK(health_status IN ('Green', 'Yellow', 'Red')),
     CONSTRAINT fk_projects_developer
-        FOREIGN KEY (developer_id) REFERENCES Developers(id)
+        FOREIGN KEY (assigned_developer_id) REFERENCES Users(id)
         ON DELETE RESTRICT
         ON UPDATE CASCADE
 );
@@ -92,16 +93,18 @@ CREATE TABLE IF NOT EXISTS Blockers (
 );
 """
 
-ALL_DDL = [DDL_DEVELOPERS, DDL_PROJECTS, DDL_PHASES, DDL_BLOCKERS]
+ALL_DDL = [DDL_USERS, DDL_PROJECTS, DDL_PHASES, DDL_BLOCKERS]
 
 
 # ---------------------------------------------------------------------------
 # Seed Data
 # ---------------------------------------------------------------------------
 
-SEED_DEVELOPERS = [
-    # (name, email, is_active)
-    ("John Doe RPA", "john.doe.rpa@empresa.com", 1),
+SEED_USERS = [
+    # (name, email, role, is_active)
+    ("System Admin", "admin@empresa.com", "Admin", 1),
+    ("PMO Lead", "pmo@empresa.com", "PMO", 1),
+    ("John Doe RPA", "john.doe.rpa@empresa.com", "Developer", 1),
 ]
 
 SEED_PROJECTS = [
@@ -142,23 +145,23 @@ def insert_seed_data(cursor: sqlite3.Cursor) -> None:
     Usa INSERT OR IGNORE para evitar duplicados en ejecuciones repetidas.
     """
 
-    # --- Developers ---
+    # --- Users ---
     cursor.executemany(
         """
-        INSERT OR IGNORE INTO Developers (name, email, is_active)
-        VALUES (?, ?, ?)
+        INSERT OR IGNORE INTO Users (name, email, role, is_active)
+        VALUES (?, ?, ?, ?)
         """,
-        SEED_DEVELOPERS,
+        SEED_USERS,
     )
-    print(f"  [OK] Developers insertados / ya existentes: {len(SEED_DEVELOPERS)}")
+    print(f"  [OK] Users insertados / ya existentes: {len(SEED_USERS)}")
 
     # --- Projects ---
     for proj in SEED_PROJECTS:
         process_name, dev_email, start_date, end_date, health = proj
 
-        # Resolver developer_id por email (integridad referencial explícita)
+        # Resolver assigned_developer_id por email (integridad referencial explícita)
         cursor.execute(
-            "SELECT id FROM Developers WHERE email = ?", (dev_email,)
+            "SELECT id FROM Users WHERE email = ?", (dev_email,)
         )
         row = cursor.fetchone()
         if row is None:
@@ -166,15 +169,15 @@ def insert_seed_data(cursor: sqlite3.Cursor) -> None:
                 f"Developer con email '{dev_email}' no encontrado. "
                 "Verifica los datos semilla."
             )
-        developer_id = row[0]
+        assigned_developer_id = row[0]
 
         cursor.execute(
             """
             INSERT OR IGNORE INTO Projects
-                (process_name, developer_id, start_date, estimated_end_date, health_status)
+                (process_name, assigned_developer_id, start_date, estimated_end_date, health_status)
             VALUES (?, ?, ?, ?, ?)
             """,
-            (process_name, developer_id, start_date, end_date, health),
+            (process_name, assigned_developer_id, start_date, end_date, health),
         )
     print(f"  [OK] Projects insertados / ya existentes: {len(SEED_PROJECTS)}")
 
