@@ -59,14 +59,16 @@ CREATE TABLE IF NOT EXISTS Projects (
 
 DDL_PHASES = """
 CREATE TABLE IF NOT EXISTS Phases (
-    id                INTEGER PRIMARY KEY AUTOINCREMENT,
-    project_id        INTEGER NOT NULL,
-    phase_name        TEXT    NOT NULL,
-    weight_percentage INTEGER NOT NULL
-                              CHECK(weight_percentage BETWEEN 1 AND 100),
-    status            TEXT    NOT NULL DEFAULT 'Pending'
-                              CHECK(status IN ('Pending', 'In Progress', 'Completed')),
-    completion_date   TEXT,                       -- NULL hasta que se complete
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id         INTEGER NOT NULL,
+    phase_name         TEXT    NOT NULL,
+    weight_percentage  INTEGER NOT NULL
+                               CHECK(weight_percentage BETWEEN 1 AND 100),
+    status             TEXT    NOT NULL DEFAULT 'Pending'
+                               CHECK(status IN ('Pending', 'In Progress', 'Completed')),
+    start_date         TEXT    NOT NULL,                  -- formato ISO-8601
+    estimated_end_date TEXT    NOT NULL,                  -- formato ISO-8601
+    completion_date    TEXT,                              -- NULL hasta que se complete
     CONSTRAINT fk_phases_project
         FOREIGN KEY (project_id) REFERENCES Projects(id)
         ON DELETE CASCADE
@@ -113,12 +115,12 @@ SEED_PROJECTS = [
     ),
 ]
 
-# Fases estándar RPA  (phase_name, weight_percentage, status)
+# Fases estándar RPA  (phase_name, weight_percentage, status, start_date, estimated_end_date)
 SEED_PHASES_TEMPLATE = [
-    ("Discovery",    10, "Completed"),
-    ("Design",       30, "In Progress"),
-    ("Development",  40, "Pending"),
-    ("UAT",          20, "Pending"),
+    ("Discovery",    10, "Completed",   "2026-04-01", "2026-04-15"),
+    ("Design",       30, "In Progress", "2026-04-16", "2026-05-15"),
+    ("Development",  40, "Pending",     "2026-05-16", "2026-07-31"),
+    ("UAT",          20, "Pending",     "2026-08-01", "2026-08-31"),
 ]
 
 
@@ -187,20 +189,20 @@ def insert_seed_data(cursor: sqlite3.Cursor) -> None:
         raise ValueError("No se encontró el proyecto semilla para insertar Phases.")
     project_id = project_row[0]
 
-    for phase_name, weight, status in SEED_PHASES_TEMPLATE:
+    for phase_name, weight, status, start_date, estimated_end_date in SEED_PHASES_TEMPLATE:
         completion_date = "2026-04-15" if status == "Completed" else None
         cursor.execute(
             """
             INSERT OR IGNORE INTO Phases
-                (project_id, phase_name, weight_percentage, status, completion_date)
-            SELECT ?, ?, ?, ?, ?
+                (project_id, phase_name, weight_percentage, status, start_date, estimated_end_date, completion_date)
+            SELECT ?, ?, ?, ?, ?, ?, ?
             WHERE NOT EXISTS (
                 SELECT 1 FROM Phases
                 WHERE project_id = ? AND phase_name = ?
             )
             """,
             (
-                project_id, phase_name, weight, status, completion_date,
+                project_id, phase_name, weight, status, start_date, estimated_end_date, completion_date,
                 project_id, phase_name,
             ),
         )

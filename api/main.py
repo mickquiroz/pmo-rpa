@@ -123,6 +123,8 @@ class PhaseResponse(BaseModel):
     phase_name: str
     weight_percentage: int
     status: str
+    start_date: str
+    estimated_end_date: str
     completion_date: Optional[str]
 
     class Config:
