@@ -17,6 +17,14 @@
 <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
     <div class="container-fluid">
         <a class="navbar-brand fw-bold" href="#">PMO RPA Dashboard</a>
+        <div class="d-flex align-items-center">
+            <label for="role-select" class="text-white me-2 mb-0 fw-semibold">Ver como:</label>
+            <select id="role-select" class="form-select form-select-sm w-auto">
+                <option value="Admin">Admin</option>
+                <option value="PMO" selected>PMO</option>
+                <option value="Developer">Developer</option>
+            </select>
+        </div>
     </div>
 </nav>
 
@@ -28,7 +36,10 @@
     <div class="card shadow-sm border-0">
         <div class="card-header bg-white border-bottom-0 pt-4 pb-0 d-flex justify-content-between align-items-center">
             <h5 class="card-title fw-bold text-dark mb-0">Resumen de Proyectos</h5>
-            <button id="btn-export" class="btn btn-success">Descargar Reporte</button>
+            <div>
+                <button id="btn-create-project" class="btn btn-primary me-2" data-bs-toggle="modal" data-bs-target="#createProjectModal" style="display: none;">Crear Proyecto</button>
+                <button id="btn-export" class="btn btn-success">Descargar Reporte</button>
+            </div>
         </div>
         <div class="card-body">
             <div class="table-responsive">
@@ -60,6 +71,45 @@
             </div>
             <div class="modal-body overflow-auto">
                 <div id="gantt-target"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create Project Modal -->
+<div class="modal fade" id="createProjectModal" tabindex="-1" aria-labelledby="createProjectModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold" id="createProjectModalLabel">Crear Nuevo Proyecto</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="create-project-form">
+                    <div class="mb-3">
+                        <label for="process-name" class="form-label">Nombre del Proceso</label>
+                        <input type="text" class="form-control" id="process-name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="assigned-developer" class="form-label">Desarrollador Asignado</label>
+                        <select class="form-select" id="assigned-developer" required>
+                            <!-- ID asumiendo la semilla del backend -->
+                            <option value="3">Developer User (ID: 3)</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="start-date" class="form-label">Fecha de Inicio</label>
+                        <input type="date" class="form-control" id="start-date" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="estimated-end-date" class="form-label">Fecha Estimada de Fin</label>
+                        <input type="date" class="form-control" id="estimated-end-date" required>
+                    </div>
+                    <div class="text-end mt-4">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">Guardar Proyecto</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>

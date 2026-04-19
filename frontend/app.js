@@ -1,5 +1,7 @@
 // app.js
 
+let currentRole = 'PMO';
+
 document.addEventListener('DOMContentLoaded', () => {
     fetchProjects();
 
@@ -8,6 +10,20 @@ document.addEventListener('DOMContentLoaded', () => {
         btnExport.addEventListener('click', () => {
             window.open('/api/v1/reports/export', '_blank');
         });
+    }
+
+    const roleSelect = document.getElementById('role-select');
+    if (roleSelect) {
+        roleSelect.addEventListener('change', (e) => {
+            currentRole = e.target.value;
+            applyRoleUI();
+        });
+        applyRoleUI();
+    }
+
+    const createProjectForm = document.getElementById('create-project-form');
+    if (createProjectForm) {
+        createProjectForm.addEventListener('submit', handleCreateProject);
     }
 });
 
@@ -138,6 +154,67 @@ async function showProjectGantt(projectId, projectName) {
     } catch (error) {
         console.error('Error al cargar Gantt:', error);
         alert('Ocurrió un error al cargar el diagrama de Gantt.');
+    }
+}
+
+function applyRoleUI() {
+    const btnCreate = document.getElementById('btn-create-project');
+    const btnExport = document.getElementById('btn-export');
+
+    if (currentRole === 'Admin' || currentRole === 'PMO') {
+        if (btnCreate) btnCreate.style.display = 'inline-block';
+        if (btnExport) btnExport.style.display = 'inline-block';
+    } else {
+        if (btnCreate) btnCreate.style.display = 'none';
+        if (btnExport) btnExport.style.display = 'none';
+    }
+}
+
+async function handleCreateProject(event) {
+    event.preventDefault();
+
+    const processName = document.getElementById('process-name').value;
+    const assignedDeveloperId = parseInt(document.getElementById('assigned-developer').value, 10);
+    const startDate = document.getElementById('start-date').value;
+    const estimatedEndDate = document.getElementById('estimated-end-date').value;
+
+    const projectData = {
+        process_name: processName,
+        assigned_developer_id: assignedDeveloperId,
+        start_date: startDate,
+        estimated_end_date: estimatedEndDate
+    };
+
+    try {
+        const response = await fetch('/api/v1/projects', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(projectData)
+        });
+
+        if (!response.ok) {
+            throw new Error('No se pudo crear el proyecto');
+        }
+
+        // Close modal
+        const modalEl = document.getElementById('createProjectModal');
+        const modalInstance = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+        modalInstance.hide();
+
+        // Reset form
+        document.getElementById('create-project-form').reset();
+
+        // Show alert
+        alert('Proyecto creado exitosamente.');
+
+        // Refresh table
+        fetchProjects();
+
+    } catch (error) {
+        console.error('Error al crear proyecto:', error);
+        alert('Error al crear el proyecto. Revisa la consola para más detalles.');
     }
 }
 
