@@ -55,14 +55,12 @@ function renderProjects(projects) {
     tbody.innerHTML = '';
 
     if (!projects || projects.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No hay proyectos registrados.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No hay proyectos registrados.</td></tr>';
         return;
     }
 
     projects.forEach(project => {
         const tr = document.createElement('tr');
-        tr.style.cursor = 'pointer';
-        tr.onclick = () => showProjectGantt(project.id, project.process_name);
         
         // Health Status Badge/Color formatting
         let healthClass = '';
@@ -98,6 +96,10 @@ function renderProjects(projects) {
                         <div class="progress-bar ${progressColorClass}" role="progressbar" style="width: ${progressPercentage}%;" aria-valuenow="${progressPercentage}" aria-valuemin="0" aria-valuemax="100">${progressPercentage}%</div>
                     </div>
                 </div>
+            </td>
+            <td>
+                <button class="btn btn-sm btn-outline-primary me-1" onclick="showProjectGantt(${project.id}, '${project.process_name}')">Ver Gantt</button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="openManagePhases(${project.id})">Editar Fases</button>
             </td>
         `;
         tbody.appendChild(tr);
@@ -218,3 +220,109 @@ async function handleCreateProject(event) {
     }
 }
 
+// Phase Management Logic
+async function openManagePhases(projectId) {
+    try {
+        const response = await fetch(`/api/v1/projects/${projectId}/phases`);
+        if (!response.ok) {
+            throw new Error('No se pudieron obtener las fases');
+        }
+        const phases = await response.json();
+
+        const tbody = document.getElementById('phases-table-body');
+        tbody.innerHTML = '';
+
+        if (!phases || phases.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No hay fases para este proyecto.</td></tr>';
+        } else {
+            phases.forEach(phase => {
+                const tr = document.createElement('tr');
+                
+                const isDev = currentRole === 'Developer';
+                const isPMO = currentRole === 'PMO';
+
+                tr.innerHTML = `
+                    <td class="fw-semibold">${phase.phase_name}</td>
+                    <td><input type="date" class="form-control form-control-sm phase-start" value="${phase.start_date || ''}" ${isDev ? 'disabled' : ''}></td>
+                    <td><input type="date" class="form-control form-control-sm phase-end" value="${phase.estimated_end_date || ''}" ${isDev ? 'disabled' : ''}></td>
+                    <td>
+                        <select class="form-select form-select-sm phase-status" ${isPMO ? 'disabled' : ''}>
+                            <option value="Pending" ${phase.status === 'Pending' ? 'selected' : ''}>Pending</option>
+                            <option value="In Progress" ${phase.status === 'In Progress' ? 'selected' : ''}>In Progress</option>
+                            <option value="Completed" ${phase.status === 'Completed' ? 'selected' : ''}>Completed</option>
+                        </select>
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-primary btn-save-phase" onclick="updatePhase(${phase.id}, this.closest('tr'))">Guardar</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        const modal = new bootstrap.Modal(document.getElementById('managePhasesModal'));
+        modal.show();
+
+    } catch (error) {
+        console.error('Error al abrir administrar fases:', error);
+        alert('Ocurrió un error al cargar las fases del proyecto.');
+    }
+}
+
+async function updatePhase(phaseId, rowElement) {
+    const isDev = currentRole === 'Developer';
+    const isPMO = currentRole === 'PMO';
+    const isAdmin = currentRole === 'Admin';
+    
+    const startDateVal = rowElement.querySelector('.phase-start').value || null;
+    const endDateVal = rowElement.querySelector('.phase-end').value || null;
+    const statusVal = rowElement.querySelector('.phase-status').value;
+
+    const btnSave = rowElement.querySelector('.btn-save-phase');
+    const originalBtnText = btnSave.innerText;
+    btnSave.innerText = 'Guardando...';
+    btnSave.disabled = true;
+
+    try {
+        // PMO or Admin can update dates
+        if (isPMO || isAdmin) {
+            const dateResponse = await fetch(`/api/v1/phases/${phaseId}/dates`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    start_date: startDateVal,
+                    estimated_end_date: endDateVal
+                })
+            });
+            if (!dateResponse.ok) {
+                throw new Error('Error actualizando fechas de la fase');
+            }
+        }
+
+        // Developer or Admin can update status
+        if (isDev || isAdmin) {
+            const statusResponse = await fetch(`/api/v1/phases/${phaseId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    status: statusVal
+                })
+            });
+            if (!statusResponse.ok) {
+                throw new Error('Error actualizando estado de la fase');
+            }
+        }
+
+        alert('Fase actualizada correctamente.');
+        
+        // Refresh the main table to update progress
+        fetchProjects();
+
+    } catch (error) {
+        console.error('Error al actualizar fase:', error);
+        alert('Error al actualizar la fase. Revisa la consola para más detalles.');
+    } finally {
+        btnSave.innerText = originalBtnText;
+        btnSave.disabled = false;
+    }
+}

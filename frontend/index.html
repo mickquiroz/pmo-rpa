@@ -50,6 +50,7 @@
                             <th>Desarrollador</th>
                             <th>Estado de Salud</th>
                             <th class="w-25">Avance General</th>
+                            <th>Acciones</th>
                         </tr>
                     </thead>
                     <tbody id="projects-table-body">
@@ -110,6 +111,39 @@
                         <button type="submit" class="btn btn-primary">Guardar Proyecto</button>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Manage Phases Modal -->
+<div class="modal fade" id="managePhasesModal" tabindex="-1" aria-labelledby="managePhasesModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold" id="managePhasesModalLabel">Administrar Fases</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Fase</th>
+                                <th>Fecha Inicio</th>
+                                <th>Fecha Fin</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="phases-table-body">
+                            <!-- Phases injected dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
             </div>
         </div>
     </div>
