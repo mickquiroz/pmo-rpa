@@ -30,11 +30,15 @@ from datetime import date
 from pathlib import Path
 from typing import Generator, List, Optional
 
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, status, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, Field
+from datetime import timedelta
+
+from .auth import verify_password, create_access_token, get_current_user, ACCESS_TOKEN_EXPIRE_MINUTES
 
 # ---------------------------------------------------------------------------
 # Configuración global
@@ -196,6 +200,31 @@ class BlockerResponse(BaseModel):
 def health_check() -> dict:
     return {"status": "ok", "api": "PMO-RPA", "version": "1.0.0"}
 
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/auth/token
+# ---------------------------------------------------------------------------
+
+@app.post(f"{API_PREFIX}/auth/token", tags=["Auth"], summary="Obtiene token JWT de acceso")
+def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
+    with get_db() as conn:
+        user = conn.execute(
+            "SELECT * FROM Users WHERE email = ? AND is_active = 1",
+            (form_data.username,)
+        ).fetchone()
+        
+    if not user or not verify_password(form_data.password, user["hashed_password"]):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credenciales inválidas (email o contraseña incorrectos)",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+        
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user["email"], "role": user["role"]}, expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
 
 # ---------------------------------------------------------------------------
 # GET /api/v1/projects
@@ -438,7 +467,7 @@ def export_projects_csv():
     summary="Crea un proyecto y autogenera sus 4 fases RPA",
     status_code=status.HTTP_201_CREATED,
 )
-def create_project(payload: ProjectCreate) -> dict:
+def create_project(payload: ProjectCreate, current_user: dict = Depends(get_current_user)) -> dict:
     """
     Inserta un nuevo proyecto.
     Valida que assigned_developer_id corresponda a un usuario con rol 'Developer'.

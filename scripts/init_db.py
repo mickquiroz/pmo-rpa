@@ -34,11 +34,12 @@ DB_PATH  = DB_DIR / "pmo_rpa.db"
 
 DDL_USERS = """
 CREATE TABLE IF NOT EXISTS Users (
-    id        INTEGER PRIMARY KEY AUTOINCREMENT,
-    name      TEXT    NOT NULL,
-    email     TEXT    NOT NULL UNIQUE,
-    role      TEXT    NOT NULL CHECK(role IN ('Admin', 'PMO', 'Developer')),
-    is_active INTEGER NOT NULL DEFAULT 1
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    name            TEXT    NOT NULL,
+    email           TEXT    NOT NULL UNIQUE,
+    hashed_password TEXT    NOT NULL,
+    role            TEXT    NOT NULL CHECK(role IN ('Admin', 'PMO', 'Developer')),
+    is_active       INTEGER NOT NULL DEFAULT 1
 );
 """
 
@@ -100,11 +101,14 @@ ALL_DDL = [DDL_USERS, DDL_PROJECTS, DDL_PHASES, DDL_BLOCKERS]
 # Seed Data
 # ---------------------------------------------------------------------------
 
+from passlib.context import CryptContext
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
 SEED_USERS = [
-    # (name, email, role, is_active)
-    ("System Admin", "admin@empresa.com", "Admin", 1),
-    ("PMO Lead", "pmo@empresa.com", "PMO", 1),
-    ("John Doe RPA", "john.doe.rpa@empresa.com", "Developer", 1),
+    # (name, email, role, is_active, raw_password)
+    ("System Admin", "admin@empresa.com", "Admin", 1, "admin123"),
+    ("PMO Lead", "pmo@empresa.com", "PMO", 1, "pmo123"),
+    ("John Doe RPA", "john.doe.rpa@empresa.com", "Developer", 1, "dev123"),
 ]
 
 SEED_PROJECTS = [
@@ -146,13 +150,16 @@ def insert_seed_data(cursor: sqlite3.Cursor) -> None:
     """
 
     # --- Users ---
-    cursor.executemany(
-        """
-        INSERT OR IGNORE INTO Users (name, email, role, is_active)
-        VALUES (?, ?, ?, ?)
-        """,
-        SEED_USERS,
-    )
+    for user in SEED_USERS:
+        name, email, role, is_active, raw_pwd = user
+        hashed_pwd = pwd_context.hash(raw_pwd)
+        cursor.execute(
+            """
+            INSERT OR IGNORE INTO Users (name, email, hashed_password, role, is_active)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (name, email, hashed_pwd, role, is_active)
+        )
     print(f"  [OK] Users insertados / ya existentes: {len(SEED_USERS)}")
 
     # --- Projects ---
