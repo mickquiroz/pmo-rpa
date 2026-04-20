@@ -288,7 +288,7 @@ ORDER BY p.id;
     summary="Lista todos los proyectos con progreso calculado",
     status_code=status.HTTP_200_OK,
 )
-def list_projects() -> List[dict]:
+def list_projects(current_user: dict = Depends(get_current_user)) -> List[dict]:
     """
     Devuelve todos los proyectos con `progress_percentage` calculado al vuelo.
 
@@ -298,7 +298,11 @@ def list_projects() -> List[dict]:
     - **Pending**     →   0 % del weight_percentage de la fase.
     """
     with get_db() as conn:
-        rows = conn.execute(_PROGRESS_QUERY).fetchall()
+        if current_user["role"] == "Developer":
+            query = _PROGRESS_QUERY.replace("GROUP BY", "WHERE p.assigned_developer_id = ?\nGROUP BY")
+            rows = conn.execute(query, (current_user["id"],)).fetchall()
+        else:
+            rows = conn.execute(_PROGRESS_QUERY).fetchall()
     return [dict(row) for row in rows]
 
 
@@ -626,6 +630,30 @@ def list_users(_: dict = Depends(get_admin_user)) -> List[dict]:
     """Devuelve la lista completa de usuarios."""
     with get_db() as conn:
         rows = conn.execute("SELECT id, name, email, role, is_active FROM Users").fetchall()
+    return [dict(row) for row in rows]
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/users/developers
+# ---------------------------------------------------------------------------
+
+@app.get(
+    f"{API_PREFIX}/users/developers",
+    response_model=List[UserResponse],
+    tags=["Users (PMO/Admin)"],
+    summary="Lista todos los desarrolladores (Solo Admin/PMO)",
+    status_code=status.HTTP_200_OK,
+)
+def list_developers(current_user: dict = Depends(get_current_user)) -> List[dict]:
+    """Devuelve la lista de desarrolladores activos."""
+    if current_user["role"] == "Developer":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permisos insuficientes. Accesible solo para PMO o Admin."
+        )
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT id, name, email, role, is_active FROM Users WHERE role = 'Developer' AND is_active = 1"
+        ).fetchall()
     return [dict(row) for row in rows]
 
 # ---------------------------------------------------------------------------

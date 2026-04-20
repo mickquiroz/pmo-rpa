@@ -1,0 +1,7 @@
+Entra a http://127.0.0.1:8000 y realiza este circuito de pruebas:
+
+El Rol Admin: Inicia sesión con admin@empresa.com / admin123. Ve a "Administrar Usuarios", crea un nuevo Developer y un nuevo PMO. Cierra sesión.
+
+El Rol PMO: Entra con tu cuenta de PMO (pmo@empresa.com / pmo123). Usa el botón "Crear Proyecto", asígnalo al desarrollador que acabas de crear y define sus fechas. Exporta tu reporte CSV. Cierra sesión.
+
+El Rol Developer: Entra con el correo del nuevo desarrollador (o usa john.doe.rpa@empresa.com / dev123). Abre "Editar Fases", cambia el estado de 'Pending' a 'Completed' de la primera fase, guarda y observa cómo la barra azul de progreso principal avanza automáticamente.
