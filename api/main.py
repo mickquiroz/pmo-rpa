@@ -155,6 +155,21 @@ class PhaseDatesUpdate(BaseModel):
     estimated_end_date: str
 
 
+class PhaseCreate(BaseModel):
+    """Payload para crear una nueva fase."""
+    project_id: int = Field(..., gt=0)
+    phase_name: str = Field(..., min_length=2)
+    weight_percentage: int = Field(..., ge=0, le=100)
+    start_date: str
+    estimated_end_date: str
+
+
+class PhaseDetailsUpdate(BaseModel):
+    """Payload para editar los datos estructurales de la fase."""
+    phase_name: str = Field(..., min_length=2)
+    weight_percentage: int = Field(..., ge=0, le=100)
+
+
 class ProjectCreate(BaseModel):
     """Payload para inyectar nuevos proyectos y generar fases en cascada."""
 
@@ -575,6 +590,105 @@ def update_phase_dates(phase_id: int, payload: PhaseDatesUpdate) -> dict:
         updated = conn.execute("SELECT * FROM Phases WHERE id = ?", (phase_id,)).fetchone()
 
     return dict(updated)
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/phases
+# ---------------------------------------------------------------------------
+
+@app.post(
+    f"{API_PREFIX}/phases",
+    response_model=PhaseResponse,
+    tags=["Phases"],
+    summary="Crea una nueva fase (Solo Admin/PMO)",
+    status_code=status.HTTP_201_CREATED,
+)
+def create_phase(payload: PhaseCreate, current_user: dict = Depends(get_current_user)) -> dict:
+    if current_user["role"] == "Developer":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permisos insuficientes. Accesible solo para PMO o Admin."
+        )
+        
+    with get_db() as conn:
+        project = conn.execute("SELECT id FROM Projects WHERE id = ?", (payload.project_id,)).fetchone()
+        if not project:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proyecto no encontrado.")
+            
+        cursor = conn.execute(
+            """
+            INSERT INTO Phases (project_id, phase_name, weight_percentage, status, start_date, estimated_end_date)
+            VALUES (?, ?, ?, 'Pending', ?, ?)
+            """,
+            (payload.project_id, payload.phase_name, payload.weight_percentage, payload.start_date, payload.estimated_end_date)
+        )
+        conn.commit()
+        new_id = cursor.lastrowid
+        
+        phase = conn.execute("SELECT * FROM Phases WHERE id = ?", (new_id,)).fetchone()
+        
+    return dict(phase)
+
+# ---------------------------------------------------------------------------
+# PUT /api/v1/phases/{phase_id}/details
+# ---------------------------------------------------------------------------
+
+@app.put(
+    f"{API_PREFIX}/phases/{{phase_id}}/details",
+    response_model=PhaseResponse,
+    tags=["Phases"],
+    summary="Actualiza nombre y peso de una fase (Solo Admin/PMO)",
+    status_code=status.HTTP_200_OK,
+)
+def update_phase_details(phase_id: int, payload: PhaseDetailsUpdate, current_user: dict = Depends(get_current_user)) -> dict:
+    if current_user["role"] == "Developer":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permisos insuficientes. Accesible solo para PMO o Admin."
+        )
+
+    with get_db() as conn:
+        phase = conn.execute("SELECT id FROM Phases WHERE id = ?", (phase_id,)).fetchone()
+        if not phase:
+            raise HTTPException(status_code=404, detail="Fase no encontrada.")
+
+        conn.execute(
+            "UPDATE Phases SET phase_name = ?, weight_percentage = ? WHERE id = ?",
+            (payload.phase_name, payload.weight_percentage, phase_id)
+        )
+        conn.commit()
+
+        updated = conn.execute("SELECT * FROM Phases WHERE id = ?", (phase_id,)).fetchone()
+
+    return dict(updated)
+
+
+# ---------------------------------------------------------------------------
+# DELETE /api/v1/phases/{phase_id}
+# ---------------------------------------------------------------------------
+
+@app.delete(
+    f"{API_PREFIX}/phases/{{phase_id}}",
+    tags=["Phases"],
+    summary="Elimina una fase de un proyecto (Solo Admin/PMO)",
+    status_code=status.HTTP_200_OK,
+)
+def delete_phase(phase_id: int, current_user: dict = Depends(get_current_user)):
+    if current_user["role"] == "Developer":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permisos insuficientes. Accesible solo para PMO o Admin."
+        )
+
+    with get_db() as conn:
+        phase = conn.execute("SELECT id FROM Phases WHERE id = ?", (phase_id,)).fetchone()
+        if not phase:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Fase no encontrada.")
+        
+        conn.execute("DELETE FROM Phases WHERE id = ?", (phase_id,))
+        conn.commit()
+    
+    return {"message": f"Fase {phase_id} eliminada exitosamente."}
 
 
 # ---------------------------------------------------------------------------
