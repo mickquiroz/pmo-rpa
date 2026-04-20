@@ -28,7 +28,7 @@ import sqlite3
 from contextlib import contextmanager
 from datetime import date
 from pathlib import Path
-from typing import Generator, List, Optional
+from typing import Generator, List, Optional, Literal
 
 from fastapi import FastAPI, HTTPException, status, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -38,7 +38,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, Field
 from datetime import timedelta
 
-from .auth import verify_password, create_access_token, get_current_user, ACCESS_TOKEN_EXPIRE_MINUTES
+from .auth import verify_password, create_access_token, get_current_user, get_admin_user, get_password_hash, ACCESS_TOKEN_EXPIRE_MINUTES
 
 # ---------------------------------------------------------------------------
 # Configuración global
@@ -181,6 +181,26 @@ class BlockerResponse(BaseModel):
     report_date: str
     resolver_owner: str
     status: str
+
+    class Config:
+        from_attributes = True
+
+
+class UserCreate(BaseModel):
+    """Payload para crear un nuevo usuario."""
+    name: str = Field(..., min_length=2)
+    email: str
+    password: str = Field(..., min_length=6)
+    role: Literal['PMO', 'Developer']
+
+
+class UserResponse(BaseModel):
+    """Representación pública de un usuario."""
+    id: int
+    name: str
+    email: str
+    role: str
+    is_active: int
 
     class Config:
         from_attributes = True
@@ -551,6 +571,84 @@ def update_phase_dates(phase_id: int, payload: PhaseDatesUpdate) -> dict:
         updated = conn.execute("SELECT * FROM Phases WHERE id = ?", (phase_id,)).fetchone()
 
     return dict(updated)
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/users
+# ---------------------------------------------------------------------------
+
+@app.post(
+    f"{API_PREFIX}/users",
+    response_model=UserResponse,
+    tags=["Users (Admin)"],
+    summary="Crea un nuevo usuario (Solo Admin)",
+    status_code=status.HTTP_201_CREATED,
+)
+def create_user(payload: UserCreate, _: dict = Depends(get_admin_user)) -> dict:
+    """Crea un usuario (rol PMO o Developer) asignándole contraseña y lo activa."""
+    hashed_password = get_password_hash(payload.password)
+    with get_db() as conn:
+        try:
+            cursor = conn.execute(
+                """
+                INSERT INTO Users (name, email, hashed_password, role, is_active)
+                VALUES (?, ?, ?, ?, 1)
+                """,
+                (payload.name, payload.email, hashed_password, payload.role)
+            )
+            conn.commit()
+            new_id = cursor.lastrowid
+            
+            user = conn.execute(
+                "SELECT id, name, email, role, is_active FROM Users WHERE id = ?",
+                (new_id,)
+            ).fetchone()
+            
+            return dict(user)
+        except sqlite3.IntegrityError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El correo electrónico ya está registrado."
+            )
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/users
+# ---------------------------------------------------------------------------
+
+@app.get(
+    f"{API_PREFIX}/users",
+    response_model=List[UserResponse],
+    tags=["Users (Admin)"],
+    summary="Lista todos los usuarios (Solo Admin)",
+    status_code=status.HTTP_200_OK,
+)
+def list_users(_: dict = Depends(get_admin_user)) -> List[dict]:
+    """Devuelve la lista completa de usuarios."""
+    with get_db() as conn:
+        rows = conn.execute("SELECT id, name, email, role, is_active FROM Users").fetchall()
+    return [dict(row) for row in rows]
+
+# ---------------------------------------------------------------------------
+# DELETE /api/v1/users/{user_id}
+# ---------------------------------------------------------------------------
+
+@app.delete(
+    f"{API_PREFIX}/users/{{user_id}}",
+    tags=["Users (Admin)"],
+    summary="Da de baja a un usuario (Soft Delete, Solo Admin)",
+    status_code=status.HTTP_200_OK,
+)
+def delete_user(user_id: int, _: dict = Depends(get_admin_user)):
+    """Inactiva a un usuario sin borrarlo físicamente para no romper relaciones."""
+    with get_db() as conn:
+        user = conn.execute("SELECT id FROM Users WHERE id = ?", (user_id,)).fetchone()
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado.")
+        
+        conn.execute("UPDATE Users SET is_active = 0 WHERE id = ?", (user_id,))
+        conn.commit()
+    
+    return {"message": f"Usuario {user_id} dado de baja exitosamente."}
 
 
 # ---------------------------------------------------------------------------
