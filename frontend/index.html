@@ -18,12 +18,7 @@
     <div class="container-fluid">
         <a class="navbar-brand fw-bold" href="#">PMO RPA Dashboard</a>
         <div class="d-flex align-items-center">
-            <label for="role-select" class="text-white me-2 mb-0 fw-semibold">Ver como:</label>
-            <select id="role-select" class="form-select form-select-sm w-auto">
-                <option value="Admin">Admin</option>
-                <option value="PMO" selected>PMO</option>
-                <option value="Developer">Developer</option>
-            </select>
+            <button id="btn-logout" class="btn btn-outline-light btn-sm fw-semibold" style="display: none;">Cerrar Sesión</button>
         </div>
     </div>
 </nav>
@@ -37,8 +32,9 @@
         <div class="card-header bg-white border-bottom-0 pt-4 pb-0 d-flex justify-content-between align-items-center">
             <h5 class="card-title fw-bold text-dark mb-0">Resumen de Proyectos</h5>
             <div>
+                <button id="btn-admin-users" class="btn btn-secondary me-2" data-bs-toggle="modal" data-bs-target="#adminUsersModal" style="display: none;">Administrar Usuarios</button>
                 <button id="btn-create-project" class="btn btn-primary me-2" data-bs-toggle="modal" data-bs-target="#createProjectModal" style="display: none;">Crear Proyecto</button>
-                <button id="btn-export" class="btn btn-success">Descargar Reporte</button>
+                <button id="btn-export" class="btn btn-success" style="display: none;">Descargar Reporte</button>
             </div>
         </div>
         <div class="card-body">
@@ -57,6 +53,95 @@
                         <!-- Projects injected dynamically -->
                     </tbody>
                 </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Login Modal -->
+<div class="modal fade" id="loginModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="loginModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title fw-bold" id="loginModalLabel">Iniciar Sesión</h5>
+            </div>
+            <div class="modal-body p-4">
+                <div id="login-error-container"></div>
+                <form id="login-form">
+                    <div class="mb-3">
+                        <label for="login-email" class="form-label">Correo Electrónico</label>
+                        <input type="email" class="form-control" id="login-email" required placeholder="admin@example.com">
+                    </div>
+                    <div class="mb-4">
+                        <label for="login-password" class="form-label">Contraseña</label>
+                        <input type="password" class="form-control" id="login-password" required placeholder="********">
+                    </div>
+                    <div class="d-grid shadow-sm">
+                        <button type="submit" class="btn btn-primary fw-bold" id="btn-login-submit">Ingresar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Admin Users Modal -->
+<div class="modal fade" id="adminUsersModal" tabindex="-1" aria-labelledby="adminUsersModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-secondary text-white">
+                <h5 class="modal-title fw-bold" id="adminUsersModalLabel">Administrar Usuarios</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="row">
+                    <!-- Create User Form -->
+                    <div class="col-md-4 border-end">
+                        <h6 class="fw-bold mb-3">Crear API User</h6>
+                        <form id="create-user-form">
+                            <div class="mb-3">
+                                <label class="form-label">Nombre Completo</label>
+                                <input type="text" class="form-control form-control-sm" id="new-user-name" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Email</label>
+                                <input type="email" class="form-control form-control-sm" id="new-user-email" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Contraseña</label>
+                                <input type="password" class="form-control form-control-sm" id="new-user-password" required minlength="4">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Rol</label>
+                                <select class="form-select form-select-sm" id="new-user-role" required>
+                                    <option value="Admin">Admin</option>
+                                    <option value="PMO" selected>PMO</option>
+                                    <option value="Developer">Developer</option>
+                                </select>
+                            </div>
+                            <button type="submit" class="btn btn-sm btn-primary w-100">Crear Usuario</button>
+                        </form>
+                    </div>
+                    <!-- Users Table -->
+                    <div class="col-md-8">
+                        <h6 class="fw-bold mb-3">Usuarios Activos</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Nombre</th>
+                                        <th>Email</th>
+                                        <th>Rol</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="users-table-body">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

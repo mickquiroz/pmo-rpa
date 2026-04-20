@@ -32,7 +32,8 @@ async function fetchProjects() {
     errorContainer.innerHTML = '';
     
     try {
-        const response = await fetch('/api/v1/projects');
+        const response = await fetch('/api/v1/projects', { headers: { 'Authorization': 'Bearer ' + authToken } });
+        if (response.status === 401) { handleLogout(); return; }
         if (!response.ok) {
             throw new Error(`Error en la respuesta del servidor: ${response.status} ${response.statusText}`);
         }
@@ -108,7 +109,8 @@ function renderProjects(projects) {
 
 async function showProjectGantt(projectId, projectName) {
     try {
-        const response = await fetch(`/api/v1/projects/${projectId}/phases`);
+        const response = await fetch(`/api/v1/projects/${projectId}/phases`, { headers: { 'Authorization': 'Bearer ' + authToken } });
+        if (response.status === 401) { handleLogout(); return; }
         if (!response.ok) {
             throw new Error('No se pudieron obtener las fases');
         }
@@ -162,8 +164,18 @@ async function showProjectGantt(projectId, projectName) {
 function applyRoleUI() {
     const btnCreate = document.getElementById('btn-create-project');
     const btnExport = document.getElementById('btn-export');
+    const btnAdminUsers = document.getElementById('btn-admin-users');
+    const btnLogout = document.getElementById('btn-logout');
 
-    if (currentRole === 'Admin' || currentRole === 'PMO') {
+    if (btnLogout) btnLogout.style.display = 'inline-block';
+
+    if (currentUserRole === 'Admin') {
+        if (btnAdminUsers) btnAdminUsers.style.display = 'inline-block';
+    } else {
+        if (btnAdminUsers) btnAdminUsers.style.display = 'none';
+    }
+
+    if (currentUserRole === 'Admin' || currentUserRole === 'PMO') {
         if (btnCreate) btnCreate.style.display = 'inline-block';
         if (btnExport) btnExport.style.display = 'inline-block';
     } else {
@@ -191,10 +203,12 @@ async function handleCreateProject(event) {
         const response = await fetch('/api/v1/projects', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + authToken
             },
             body: JSON.stringify(projectData)
         });
+        if (response.status === 401) { handleLogout(); return; }
 
         if (!response.ok) {
             throw new Error('No se pudo crear el proyecto');
@@ -223,7 +237,8 @@ async function handleCreateProject(event) {
 // Phase Management Logic
 async function openManagePhases(projectId) {
     try {
-        const response = await fetch(`/api/v1/projects/${projectId}/phases`);
+        const response = await fetch(`/api/v1/projects/${projectId}/phases`, { headers: { 'Authorization': 'Bearer ' + authToken } });
+        if (response.status === 401) { handleLogout(); return; }
         if (!response.ok) {
             throw new Error('No se pudieron obtener las fases');
         }
@@ -238,8 +253,8 @@ async function openManagePhases(projectId) {
             phases.forEach(phase => {
                 const tr = document.createElement('tr');
                 
-                const isDev = currentRole === 'Developer';
-                const isPMO = currentRole === 'PMO';
+                const isDev = currentUserRole === 'Developer';
+                const isPMO = currentUserRole === 'PMO';
 
                 tr.innerHTML = `
                     <td class="fw-semibold">${phase.phase_name}</td>
@@ -270,9 +285,9 @@ async function openManagePhases(projectId) {
 }
 
 async function updatePhase(phaseId, rowElement) {
-    const isDev = currentRole === 'Developer';
-    const isPMO = currentRole === 'PMO';
-    const isAdmin = currentRole === 'Admin';
+    const isDev = currentUserRole === 'Developer';
+    const isPMO = currentUserRole === 'PMO';
+    const isAdmin = currentUserRole === 'Admin';
     
     const startDateVal = rowElement.querySelector('.phase-start').value || null;
     const endDateVal = rowElement.querySelector('.phase-end').value || null;
@@ -288,12 +303,16 @@ async function updatePhase(phaseId, rowElement) {
         if (isPMO || isAdmin) {
             const dateResponse = await fetch(`/api/v1/phases/${phaseId}/dates`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + authToken
+                },
                 body: JSON.stringify({
                     start_date: startDateVal,
                     estimated_end_date: endDateVal
                 })
             });
+            if (dateResponse.status === 401) { handleLogout(); return; }
             if (!dateResponse.ok) {
                 throw new Error('Error actualizando fechas de la fase');
             }
@@ -303,11 +322,15 @@ async function updatePhase(phaseId, rowElement) {
         if (isDev || isAdmin) {
             const statusResponse = await fetch(`/api/v1/phases/${phaseId}`, {
                 method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + authToken
+                },
                 body: JSON.stringify({
                     status: statusVal
                 })
             });
+            if (statusResponse.status === 401) { handleLogout(); return; }
             if (!statusResponse.ok) {
                 throw new Error('Error actualizando estado de la fase');
             }
@@ -324,5 +347,177 @@ async function updatePhase(phaseId, rowElement) {
     } finally {
         btnSave.innerText = originalBtnText;
         btnSave.disabled = false;
+    }
+}
+
+
+// Auth Logic
+async function handleLogin(e) {
+    e.preventDefault();
+    
+    const email = document.getElementById('login-email').value;
+    const password = document.getElementById('login-password').value;
+    const errorContainer = document.getElementById('login-error-container');
+    const btnSubmit = document.getElementById('btn-login-submit');
+    
+    errorContainer.innerHTML = '';
+    btnSubmit.disabled = true;
+    btnSubmit.innerText = 'Ingresando...';
+
+    const params = new URLSearchParams();
+    params.append('username', email); // FastAPI OAuth2 requies 'username' for the email
+    params.append('password', password);
+
+    try {
+        const response = await fetch('/api/v1/auth/token', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: params
+        });
+
+        if (!response.ok) {
+            throw new Error('Credenciales incorrectas');
+        }
+
+        const data = await response.json();
+        authToken = data.access_token;
+        localStorage.setItem('token', authToken);
+        
+        // Decode JWT to get role
+        const payload = JSON.parse(atob(authToken.split('.')[1]));
+        currentUserRole = payload.role;
+        localStorage.setItem('role', currentUserRole);
+
+        // Hide modal
+        const modalEl = document.getElementById('loginModal');
+        const modalInstance = bootstrap.Modal.getInstance(modalEl);
+        if (modalInstance) {
+            modalInstance.hide();
+        }
+
+        applyRoleUI();
+        fetchProjects();
+
+    } catch (error) {
+        errorContainer.innerHTML = `
+            <div class="alert alert-danger py-2 mb-3" role="alert">
+                ${error.message}
+            </div>
+        `;
+    } finally {
+        btnSubmit.disabled = false;
+        btnSubmit.innerText = 'Ingresar';
+    }
+}
+
+function handleLogout() {
+    localStorage.removeItem('token');
+    localStorage.removeItem('role');
+    window.location.reload();
+}
+
+// IAM Admin Logic
+async function fetchUsers() {
+    if (currentUserRole !== 'Admin') return;
+    
+    try {
+        const response = await fetch('/api/v1/users', {
+            headers: { 'Authorization': 'Bearer ' + authToken }
+        });
+        
+        if (response.status === 401) { handleLogout(); return; }
+        
+        if (!response.ok) {
+            throw new Error('Error al obtener usuarios');
+        }
+        
+        const users = await response.json();
+        const tbody = document.getElementById('users-table-body');
+        tbody.innerHTML = '';
+        
+        users.forEach(user => {
+            if (user.is_deleted) return; // Do not show soft-deleted users
+            
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${user.id}</td>
+                <td>${user.full_name}</td>
+                <td>${user.email}</td>
+                <td><span class="badge bg-secondary">${user.role}</span></td>
+                <td>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteUser(${user.id})">Dar de baja</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+        
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error al cargar la lista de usuarios.');
+    }
+}
+
+async function createUser(e) {
+    e.preventDefault();
+    
+    const name = document.getElementById('new-user-name').value;
+    const email = document.getElementById('new-user-email').value;
+    const password = document.getElementById('new-user-password').value;
+    const role = document.getElementById('new-user-role').value;
+    
+    try {
+        const response = await fetch('/api/v1/users', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + authToken
+            },
+            body: JSON.stringify({
+                full_name: name,
+                email: email,
+                password: password,
+                role: role
+            })
+        });
+        
+        if (response.status === 401) { handleLogout(); return; }
+        
+        if (!response.ok) {
+            throw new Error('No se pudo crear el usuario');
+        }
+        
+        document.getElementById('create-user-form').reset();
+        fetchUsers();
+        
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Hubo un problema al crear al usuario. Puede que el email ya exista.');
+    }
+}
+
+async function deleteUser(id) {
+    if (!confirm('¿Estás seguro de que deseas dar de baja a este usuario?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/v1/users/${id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': 'Bearer ' + authToken }
+        });
+        
+        if (response.status === 401) { handleLogout(); return; }
+        
+        if (!response.ok) {
+            throw new Error('Error al dar de baja el usuario');
+        }
+        
+        fetchUsers(); // Refresh table
+        
+    } catch (error) {
+        console.error('Error:', error);
+        alert('No se pudo dar de baja al usuario.');
     }
 }
