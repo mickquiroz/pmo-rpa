@@ -20,6 +20,7 @@
         <div class="d-flex align-items-center">
             <button id="btn-admin-roles" class="btn btn-outline-light btn-sm fw-semibold me-2" data-bs-toggle="modal" data-bs-target="#adminRolesModal" style="display: none;">Administrar Roles</button>
             <button id="btn-admin-project-types" class="btn btn-outline-light btn-sm fw-semibold me-2" data-bs-toggle="modal" data-bs-target="#adminProjectTypesModal" style="display: none;">Tipos de Proyecto</button>
+            <button id="btn-admin-users" class="btn btn-outline-light btn-sm fw-semibold me-2" data-bs-toggle="modal" data-bs-target="#adminUsersModal" style="display: none;">Administrar Usuarios</button>
             <button id="btn-backlog" class="btn btn-outline-warning btn-sm fw-semibold me-2" data-bs-toggle="modal" data-bs-target="#backlogModal" style="display: none;">Ver Backlog</button>
             <button id="btn-logout" class="btn btn-outline-light btn-sm fw-semibold" style="display: none;">Cerrar Sesión</button>
         </div>
@@ -35,7 +36,6 @@
         <div class="card-header bg-white border-bottom-0 pt-4 pb-0 d-flex justify-content-between align-items-center">
             <h5 class="card-title fw-bold text-dark mb-0">Resumen de Proyectos</h5>
             <div>
-                <button id="btn-admin-users" class="btn btn-secondary me-2" data-bs-toggle="modal" data-bs-target="#adminUsersModal" style="display: none;">Administrar Usuarios</button>
                 <button id="btn-create-project" class="btn btn-primary me-2" data-bs-toggle="modal" data-bs-target="#createProjectModal" style="display: none;">Crear Proyecto</button>
                 <button id="btn-export" class="btn btn-success" style="display: none;">Descargar Reporte</button>
             </div>
@@ -117,9 +117,7 @@
                             <div class="mb-3">
                                 <label class="form-label">Rol</label>
                                 <select class="form-select form-select-sm" id="new-user-role" required>
-                                    <option value="Admin">Admin</option>
-                                    <option value="PMO" selected>PMO</option>
-                                    <option value="Developer">Developer</option>
+                                    <option value="">Cargando roles...</option>
                                 </select>
                             </div>
                             <button type="submit" class="btn btn-sm btn-primary w-100">Crear Usuario</button>
@@ -367,7 +365,7 @@
 
 <!-- Backlog Modal -->
 <div class="modal fade" id="backlogModal" tabindex="-1" aria-labelledby="backlogModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-warning">
                 <h5 class="modal-title fw-bold" id="backlogModalLabel">Backlog (Proyectos Eliminados)</h5>

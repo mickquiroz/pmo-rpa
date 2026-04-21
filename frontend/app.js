@@ -38,7 +38,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (createUserForm) createUserForm.addEventListener('submit', createUser);
 
     const btnAdminUsers = document.getElementById('btn-admin-users');
-    if (btnAdminUsers) btnAdminUsers.addEventListener('click', fetchUsers);
+    if (btnAdminUsers) btnAdminUsers.addEventListener('click', () => {
+        fetchUsers();
+        populateRolesSelect();
+    });
 
     const createProjectForm = document.getElementById('create-project-form');
     if (createProjectForm) createProjectForm.addEventListener('submit', handleCreateProject);
@@ -275,6 +278,10 @@ function renderProjects(projects) {
         const progress = Math.round(project.progress_percentage);
         let progressColorClass = progress === 100 ? 'bg-success' : 'bg-primary';
 
+        const deleteBtn = currentUserRole === 'Admin'
+            ? `<button class="btn btn-sm btn-danger ms-1" onclick="deleteProject(${project.id})">Eliminar</button>`
+            : '';
+
         tr.innerHTML = `
             <td class="fw-semibold text-dark">${project.process_name}</td>
             <td class="text-secondary">${project.developer_name}</td>
@@ -287,6 +294,7 @@ function renderProjects(projects) {
             <td>
                 <button class="btn btn-sm btn-outline-primary me-1" onclick="showProjectGantt(${project.id}, '${project.process_name}')">Ver Gantt</button>
                 <button class="btn btn-sm btn-outline-secondary" onclick="openManagePhases(${project.id})">Editar Fases</button>
+                ${deleteBtn}
             </td>
         `;
         tbody.appendChild(tr);
@@ -619,14 +627,19 @@ async function fetchUsers() {
         tbody.innerHTML = '';
 
         users.forEach(user => {
-            if (user.is_active === 0) return; // Ocultar Soft Deleted
+            const isActive = user.is_active === 1;
             const tr = document.createElement('tr');
+            const roleBadge = `<span class="badge bg-secondary">${user.role_name}</span>`;
+            const statusBadge = isActive ? '' : ' <span class="badge bg-danger ms-1">Inactivo</span>';
+            const actionBtn = isActive
+                ? `<button class="btn btn-sm btn-outline-danger" onclick="deleteUser(${user.id})">Dar de baja</button>`
+                : `<button class="btn btn-sm btn-outline-success" onclick="reactivateUser(${user.id})">Reactivar</button>`;
             tr.innerHTML = `
                 <td>${user.id}</td>
-                <td>${user.name}</td>
+                <td>${user.name}${statusBadge}</td>
                 <td>${user.email}</td>
-                <td><span class="badge bg-secondary">${user.role}</span></td>
-                <td><button class="btn btn-sm btn-outline-danger" onclick="deleteUser(${user.id})">Dar de baja</button></td>
+                <td>${roleBadge}</td>
+                <td>${actionBtn}</td>
             `;
             tbody.appendChild(tr);
         });
@@ -638,13 +651,18 @@ async function createUser(e) {
     const name = document.getElementById('new-user-name').value;
     const email = document.getElementById('new-user-email').value;
     const password = document.getElementById('new-user-password').value;
-    const role = document.getElementById('new-user-role').value;
+    const roleId = parseInt(document.getElementById('new-user-role').value, 10);
+
+    if (!roleId) {
+        alert('Por favor selecciona un rol válido.');
+        return;
+    }
 
     try {
         const response = await fetch('/api/v1/users', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
-            body: JSON.stringify({ name, email, password, role }) // Ajustado al schema Pydantic exacto
+            body: JSON.stringify({ name, email, password, role_id: roleId })
         });
         if (response.status === 401) { handleLogout(); return; }
         if (!response.ok) throw new Error('Error de Servidor');
@@ -664,6 +682,53 @@ async function deleteUser(id) {
         if (response.status === 401) { handleLogout(); return; }
         fetchUsers();
     } catch (error) { alert('Error al procesar la baja'); }
+}
+
+async function reactivateUser(id) {
+    if (!confirm('¿Reactivar a este usuario?')) return;
+    try {
+        const response = await fetch(`/api/v1/users/${id}/reactivate`, {
+            method: 'PATCH',
+            headers: { 'Authorization': 'Bearer ' + authToken }
+        });
+        if (response.status === 401) { handleLogout(); return; }
+        if (!response.ok) throw new Error('Error al reactivar usuario');
+        fetchUsers();
+    } catch (error) { alert('Error al reactivar el usuario'); }
+}
+
+async function populateRolesSelect() {
+    try {
+        const response = await fetch('/api/v1/roles', {
+            headers: { 'Authorization': 'Bearer ' + authToken }
+        });
+        if (!response.ok) throw new Error('Error al obtener roles');
+
+        const roles = await response.json();
+        const select = document.getElementById('new-user-role');
+        if (select) {
+            select.innerHTML = '<option value="">Selecciona un rol...</option>';
+            roles.forEach(role => {
+                const option = document.createElement('option');
+                option.value = role.id;           // role_id (int) para el backend
+                option.textContent = role.name;
+                select.appendChild(option);
+            });
+        }
+    } catch (error) { console.error('Error al poblar roles:', error); }
+}
+
+async function deleteProject(projectId) {
+    if (!confirm('¿Eliminar este proyecto del tablero? Pasará al Backlog.')) return;
+    try {
+        const response = await fetch(`/api/v1/projects/${projectId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': 'Bearer ' + authToken }
+        });
+        if (response.status === 401) { handleLogout(); return; }
+        if (!response.ok) throw new Error('Error al eliminar proyecto');
+        fetchProjects();
+    } catch (error) { alert('No se pudo eliminar el proyecto.'); }
 }
 
 async function exportCSV() {

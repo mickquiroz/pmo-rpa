@@ -629,32 +629,36 @@ def create_project(payload: ProjectCreate, current_user: dict = Depends(get_curr
             (payload.project_type_id,)
         ).fetchall()
 
-        if not templates:
-            # Revertir si no hay fases (aunque conn.commit() ocurre después, solo para ser explícitos o simplemente fallar)
-            raise HTTPException(status_code=400, detail="El tipo de proyecto no tiene plantillas de fases asociadas.")
+        if templates:
+            # Si hay plantillas, insertar fases en cascada
+            phases_data = [
+                (project_id, t["phase_name"], t["weight_percentage"], payload.start_date, payload.estimated_end_date)
+                for t in templates
+            ]
+            conn.executemany(
+                """
+                INSERT INTO Phases (project_id, phase_name, weight_percentage, status, start_date, estimated_end_date)
+                VALUES (?, ?, ?, 'Pending', ?, ?)
+                """,
+                phases_data
+            )
+        # Si no hay plantillas, se crea el proyecto vacío para que el PMO agregue fases manualmente
 
-        phases_data = [
-            (project_id, t["phase_name"], t["weight_percentage"], payload.start_date, payload.estimated_end_date)
-            for t in templates
-        ]
-
-        conn.executemany(
-            """
-            INSERT INTO Phases (project_id, phase_name, weight_percentage, status, start_date, estimated_end_date)
-            VALUES (?, ?, ?, 'Pending', ?, ?)
-            """,
-            phases_data
-        )
         conn.commit()
 
         # Recuperar proyecto creado con progress_percentage
         row = conn.execute(
             _PROGRESS_QUERY.replace("ORDER BY p.id;", "HAVING p.id = ?;")
         , (project_id,)).fetchone()
-        
+
         if not row:
-            # Fallback
-            row = conn.execute("SELECT * FROM Projects WHERE id = ?", (project_id,)).fetchone()
+            # Fallback: Construir respuesta mínima desde Projects
+            p_row = conn.execute("SELECT * FROM Projects WHERE id = ?", (project_id,)).fetchone()
+            dev_row = conn.execute("SELECT name FROM Users WHERE id = ?", (payload.assigned_developer_id,)).fetchone()
+            row_dict = dict(p_row)
+            row_dict["developer_name"] = dev_row["name"] if dev_row else "N/A"
+            row_dict["progress_percentage"] = 0.0
+            return row_dict
 
     return dict(row)
 
@@ -901,6 +905,29 @@ def delete_user(user_id: int, _: dict = Depends(get_admin_user)):
         conn.commit()
     
     return {"message": f"Usuario {user_id} dado de baja exitosamente."}
+
+
+# ---------------------------------------------------------------------------
+# PATCH /api/v1/users/{user_id}/reactivate
+# ---------------------------------------------------------------------------
+
+@app.patch(
+    f"{API_PREFIX}/users/{{user_id}}/reactivate",
+    tags=["Users (Admin)"],
+    summary="Reactiva un usuario dado de baja (Solo Admin)",
+    status_code=status.HTTP_200_OK,
+)
+def reactivate_user(user_id: int, _: dict = Depends(get_admin_user)):
+    """Reactiva a un usuario con is_active = 0, volviendo a establecerlo en is_active = 1."""
+    with get_db() as conn:
+        user = conn.execute("SELECT id FROM Users WHERE id = ?", (user_id,)).fetchone()
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado.")
+
+        conn.execute("UPDATE Users SET is_active = 1 WHERE id = ?", (user_id,))
+        conn.commit()
+
+    return {"message": f"Usuario {user_id} reactivado exitosamente."}
 
 
 # ---------------------------------------------------------------------------
