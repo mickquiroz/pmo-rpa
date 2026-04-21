@@ -58,7 +58,12 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.row_factory = sqlite3.Row
         user = conn.execute(
-            "SELECT id, name, email, role FROM Users WHERE email = ? AND is_active = 1",
+            """
+            SELECT u.id, u.name, u.email, r.name as role 
+            FROM Users u
+            JOIN Roles r ON u.role_id = r.id
+            WHERE u.email = ? AND u.is_active = 1
+            """,
             (email,)
         ).fetchone()
         

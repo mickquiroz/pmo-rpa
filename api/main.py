@@ -107,6 +107,9 @@ class ProjectResponse(BaseModel):
 
     id: int
     process_name: str
+    project_type_id: int
+    assigned_developer_id: int
+    commercial_id: Optional[int]
     developer_name: str
     health_status: str
     start_date: str
@@ -174,7 +177,9 @@ class ProjectCreate(BaseModel):
     """Payload para inyectar nuevos proyectos y generar fases en cascada."""
 
     process_name: str = Field(..., min_length=2)
+    project_type_id: int = Field(..., gt=0)
     assigned_developer_id: int = Field(..., gt=0)
+    commercial_id: Optional[int] = None
     start_date: str
     estimated_end_date: str
 
@@ -206,7 +211,7 @@ class UserCreate(BaseModel):
     name: str = Field(..., min_length=2)
     email: str
     password: str = Field(..., min_length=6)
-    role: Literal['PMO', 'Developer']
+    role_id: int = Field(..., gt=0)
 
 
 class UserResponse(BaseModel):
@@ -214,8 +219,45 @@ class UserResponse(BaseModel):
     id: int
     name: str
     email: str
-    role: str
+    role_id: int
+    role_name: str
     is_active: int
+
+    class Config:
+        from_attributes = True
+
+class RoleCreate(BaseModel):
+    name: str = Field(..., min_length=2)
+    description: Optional[str] = None
+
+class RoleResponse(BaseModel):
+    id: int
+    name: str
+    description: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+class ProjectTypeCreate(BaseModel):
+    name: str = Field(..., min_length=2)
+
+class ProjectTypeResponse(BaseModel):
+    id: int
+    name: str
+
+    class Config:
+        from_attributes = True
+
+class PhaseCommentCreate(BaseModel):
+    comment_text: str = Field(..., min_length=1)
+
+class PhaseCommentResponse(BaseModel):
+    id: int
+    phase_id: int
+    user_id: int
+    user_name: str
+    comment_text: str
+    created_at: str
 
     class Config:
         from_attributes = True
@@ -244,7 +286,12 @@ def health_check() -> dict:
 def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
     with get_db() as conn:
         user = conn.execute(
-            "SELECT * FROM Users WHERE email = ? AND is_active = 1",
+            """
+            SELECT u.*, r.name as role
+            FROM Users u
+            JOIN Roles r ON u.role_id = r.id
+            WHERE u.email = ? AND u.is_active = 1
+            """,
             (form_data.username,)
         ).fetchone()
         
@@ -269,6 +316,9 @@ _PROGRESS_QUERY = """
 SELECT
     p.id,
     p.process_name,
+    p.project_type_id,
+    p.assigned_developer_id,
+    p.commercial_id,
     d.name                                        AS developer_name,
     p.health_status,
     p.start_date,
@@ -285,9 +335,13 @@ SELECT
 FROM Projects  p
 JOIN Users d  ON  d.id  = p.assigned_developer_id
 LEFT JOIN Phases ph ON ph.project_id = p.id
+WHERE p.is_deleted = 0
 GROUP BY
     p.id,
     p.process_name,
+    p.project_type_id,
+    p.assigned_developer_id,
+    p.commercial_id,
     d.name,
     p.health_status,
     p.start_date,
@@ -314,7 +368,10 @@ def list_projects(current_user: dict = Depends(get_current_user)) -> List[dict]:
     """
     with get_db() as conn:
         if current_user["role"] == "Developer":
-            query = _PROGRESS_QUERY.replace("GROUP BY", "WHERE p.assigned_developer_id = ?\nGROUP BY")
+            query = _PROGRESS_QUERY.replace("WHERE p.is_deleted = 0", "WHERE p.is_deleted = 0 AND p.assigned_developer_id = ?")
+            rows = conn.execute(query, (current_user["id"],)).fetchall()
+        elif current_user["role"] == "Pre-Sales Viewer":
+            query = _PROGRESS_QUERY.replace("WHERE p.is_deleted = 0", "WHERE p.is_deleted = 0 AND p.commercial_id = ?")
             rows = conn.execute(query, (current_user["id"],)).fetchall()
         else:
             rows = conn.execute(_PROGRESS_QUERY).fetchall()
@@ -515,7 +572,12 @@ def create_project(payload: ProjectCreate, current_user: dict = Depends(get_curr
     with get_db() as conn:
         # Validar developer
         dev = conn.execute(
-            "SELECT id, role FROM Users WHERE id = ? AND is_active = 1",
+            """
+            SELECT u.id, r.name as role 
+            FROM Users u
+            JOIN Roles r ON u.role_id = r.id
+            WHERE u.id = ? AND u.is_active = 1
+            """,
             (payload.assigned_developer_id,)
         ).fetchone()
         
@@ -527,20 +589,26 @@ def create_project(payload: ProjectCreate, current_user: dict = Depends(get_curr
         # Insertar proyecto
         cursor = conn.execute(
             """
-            INSERT INTO Projects (process_name, assigned_developer_id, start_date, estimated_end_date, health_status)
-            VALUES (?, ?, ?, ?, 'Green')
+            INSERT INTO Projects (process_name, project_type_id, assigned_developer_id, commercial_id, start_date, estimated_end_date, health_status)
+            VALUES (?, ?, ?, ?, ?, ?, 'Green')
             """,
-            (payload.process_name, payload.assigned_developer_id, payload.start_date, payload.estimated_end_date)
+            (payload.process_name, payload.project_type_id, payload.assigned_developer_id, payload.commercial_id, payload.start_date, payload.estimated_end_date)
         )
         project_id = cursor.lastrowid
 
-        # Insertar 4 fases por defecto
-        # Se asumen fechas genéricas, luego la PMO puede hacer un PUT a fechas (o se calculan solapadas)
+        # Leer plantillas de fases dinámicamente
+        templates = conn.execute(
+            "SELECT phase_name, weight_percentage FROM Phase_Templates WHERE project_type_id = ?",
+            (payload.project_type_id,)
+        ).fetchall()
+
+        if not templates:
+            # Revertir si no hay fases (aunque conn.commit() ocurre después, solo para ser explícitos o simplemente fallar)
+            raise HTTPException(status_code=400, detail="El tipo de proyecto no tiene plantillas de fases asociadas.")
+
         phases_data = [
-            (project_id, "Discovery", 10, payload.start_date, payload.estimated_end_date),
-            (project_id, "Design", 30, payload.start_date, payload.estimated_end_date),
-            (project_id, "Development", 40, payload.start_date, payload.estimated_end_date),
-            (project_id, "UAT", 20, payload.start_date, payload.estimated_end_date),
+            (project_id, t["phase_name"], t["weight_percentage"], payload.start_date, payload.estimated_end_date)
+            for t in templates
         ]
 
         conn.executemany(
@@ -703,22 +771,26 @@ def delete_phase(phase_id: int, current_user: dict = Depends(get_current_user)):
     status_code=status.HTTP_201_CREATED,
 )
 def create_user(payload: UserCreate, _: dict = Depends(get_admin_user)) -> dict:
-    """Crea un usuario (rol PMO o Developer) asignándole contraseña y lo activa."""
     hashed_password = get_password_hash(payload.password)
     with get_db() as conn:
         try:
             cursor = conn.execute(
                 """
-                INSERT INTO Users (name, email, hashed_password, role, is_active)
+                INSERT INTO Users (name, email, hashed_password, role_id, is_active)
                 VALUES (?, ?, ?, ?, 1)
                 """,
-                (payload.name, payload.email, hashed_password, payload.role)
+                (payload.name, payload.email, hashed_password, payload.role_id)
             )
             conn.commit()
             new_id = cursor.lastrowid
             
             user = conn.execute(
-                "SELECT id, name, email, role, is_active FROM Users WHERE id = ?",
+                """
+                SELECT u.id, u.name, u.email, u.role_id, r.name as role_name, u.is_active 
+                FROM Users u
+                JOIN Roles r ON u.role_id = r.id
+                WHERE u.id = ?
+                """,
                 (new_id,)
             ).fetchone()
             
@@ -726,7 +798,7 @@ def create_user(payload: UserCreate, _: dict = Depends(get_admin_user)) -> dict:
         except sqlite3.IntegrityError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="El correo electrónico ya está registrado."
+                detail="El correo electrónico ya está registrado o el rol no existe."
             )
 
 # ---------------------------------------------------------------------------
@@ -743,7 +815,13 @@ def create_user(payload: UserCreate, _: dict = Depends(get_admin_user)) -> dict:
 def list_users(_: dict = Depends(get_admin_user)) -> List[dict]:
     """Devuelve la lista completa de usuarios."""
     with get_db() as conn:
-        rows = conn.execute("SELECT id, name, email, role, is_active FROM Users").fetchall()
+        rows = conn.execute(
+            """
+            SELECT u.id, u.name, u.email, u.role_id, r.name as role_name, u.is_active 
+            FROM Users u
+            JOIN Roles r ON u.role_id = r.id
+            """
+        ).fetchall()
     return [dict(row) for row in rows]
 
 # ---------------------------------------------------------------------------
@@ -766,7 +844,12 @@ def list_developers(current_user: dict = Depends(get_current_user)) -> List[dict
         )
     with get_db() as conn:
         rows = conn.execute(
-            "SELECT id, name, email, role, is_active FROM Users WHERE role = 'Developer' AND is_active = 1"
+            """
+            SELECT u.id, u.name, u.email, u.role_id, r.name as role_name, u.is_active 
+            FROM Users u
+            JOIN Roles r ON u.role_id = r.id
+            WHERE r.name = 'Developer' AND u.is_active = 1
+            """
         ).fetchall()
     return [dict(row) for row in rows]
 
@@ -791,6 +874,169 @@ def delete_user(user_id: int, _: dict = Depends(get_admin_user)):
         conn.commit()
     
     return {"message": f"Usuario {user_id} dado de baja exitosamente."}
+
+
+# ---------------------------------------------------------------------------
+# DELETE /api/v1/projects/{project_id}
+# ---------------------------------------------------------------------------
+
+@app.delete(
+    f"{API_PREFIX}/projects/{{project_id}}",
+    tags=["Projects (Admin)"],
+    summary="Eliminado lógico de un proyecto (Solo Admin)",
+    status_code=status.HTTP_200_OK,
+)
+def delete_project(project_id: int, _: dict = Depends(get_admin_user)):
+    with get_db() as conn:
+        project = conn.execute("SELECT id FROM Projects WHERE id = ?", (project_id,)).fetchone()
+        if not project:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proyecto no encontrado.")
+        
+        conn.execute("UPDATE Projects SET is_deleted = 1 WHERE id = ?", (project_id,))
+        conn.commit()
+    
+    return {"message": f"Proyecto {project_id} eliminado lógicamente."}
+
+
+# ---------------------------------------------------------------------------
+# GET & POST /api/v1/roles
+# ---------------------------------------------------------------------------
+@app.get(
+    f"{API_PREFIX}/roles",
+    response_model=List[RoleResponse],
+    tags=["Roles (Admin)"],
+    summary="Lista todos los roles",
+    status_code=status.HTTP_200_OK,
+)
+def list_roles(_: dict = Depends(get_admin_user)) -> List[dict]:
+    with get_db() as conn:
+        rows = conn.execute("SELECT id, name, description FROM Roles").fetchall()
+    return [dict(row) for row in rows]
+
+
+@app.post(
+    f"{API_PREFIX}/roles",
+    response_model=RoleResponse,
+    tags=["Roles (Admin)"],
+    summary="Crea un rol",
+    status_code=status.HTTP_201_CREATED,
+)
+def create_role(payload: RoleCreate, _: dict = Depends(get_admin_user)) -> dict:
+    with get_db() as conn:
+        try:
+            cursor = conn.execute(
+                "INSERT INTO Roles (name, description) VALUES (?, ?)",
+                (payload.name, payload.description)
+            )
+            conn.commit()
+            new_id = cursor.lastrowid
+            
+            role = conn.execute("SELECT id, name, description FROM Roles WHERE id = ?", (new_id,)).fetchone()
+            return dict(role)
+        except sqlite3.IntegrityError:
+            raise HTTPException(status_code=400, detail="El nombre del rol ya existe.")
+
+
+# ---------------------------------------------------------------------------
+# GET & POST /api/v1/project-types
+# ---------------------------------------------------------------------------
+@app.get(
+    f"{API_PREFIX}/project-types",
+    response_model=List[ProjectTypeResponse],
+    tags=["Project Types (Admin)"],
+    summary="Lista todos los tipos de proyecto",
+    status_code=status.HTTP_200_OK,
+)
+def list_project_types(_: dict = Depends(get_admin_user)) -> List[dict]:
+    with get_db() as conn:
+        rows = conn.execute("SELECT id, name FROM Project_Types").fetchall()
+    return [dict(row) for row in rows]
+
+
+@app.post(
+    f"{API_PREFIX}/project-types",
+    response_model=ProjectTypeResponse,
+    tags=["Project Types (Admin)"],
+    summary="Crea un tipo de proyecto",
+    status_code=status.HTTP_201_CREATED,
+)
+def create_project_type(payload: ProjectTypeCreate, _: dict = Depends(get_admin_user)) -> dict:
+    with get_db() as conn:
+        try:
+            cursor = conn.execute(
+                "INSERT INTO Project_Types (name) VALUES (?)",
+                (payload.name,)
+            )
+            conn.commit()
+            new_id = cursor.lastrowid
+            
+            ptype = conn.execute("SELECT id, name FROM Project_Types WHERE id = ?", (new_id,)).fetchone()
+            return dict(ptype)
+        except sqlite3.IntegrityError:
+            raise HTTPException(status_code=400, detail="El tipo de proyecto ya existe.")
+
+# ---------------------------------------------------------------------------
+# Comments API
+# ---------------------------------------------------------------------------
+
+@app.get(
+    f"{API_PREFIX}/phases/{{phase_id}}/comments",
+    response_model=List[PhaseCommentResponse],
+    tags=["Phase Comments"],
+    summary="Lista comentarios de una fase",
+    status_code=status.HTTP_200_OK,
+)
+def list_phase_comments(phase_id: int, _: dict = Depends(get_current_user)) -> List[dict]:
+    with get_db() as conn:
+        rows = conn.execute(
+            """
+            SELECT c.id, c.phase_id, c.user_id, u.name as user_name, c.comment_text, c.created_at
+            FROM Phase_Comments c
+            JOIN Users u ON c.user_id = u.id
+            WHERE c.phase_id = ?
+            ORDER BY c.created_at DESC
+            """,
+            (phase_id,)
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+@app.post(
+    f"{API_PREFIX}/phases/{{phase_id}}/comments",
+    response_model=PhaseCommentResponse,
+    tags=["Phase Comments"],
+    summary="Crea comentario para una fase",
+    status_code=status.HTTP_201_CREATED,
+)
+def create_phase_comment(phase_id: int, payload: PhaseCommentCreate, current_user: dict = Depends(get_current_user)) -> dict:
+    with get_db() as conn:
+        phase = conn.execute("SELECT id FROM Phases WHERE id = ?", (phase_id,)).fetchone()
+        if not phase:
+            raise HTTPException(status_code=404, detail="Fase no encontrada")
+            
+        from datetime import datetime
+        created_at = datetime.utcnow().isoformat() + "Z"
+        
+        cursor = conn.execute(
+            """
+            INSERT INTO Phase_Comments (phase_id, user_id, comment_text, created_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (phase_id, current_user["id"], payload.comment_text, created_at)
+        )
+        conn.commit()
+        new_id = cursor.lastrowid
+        
+        new_comment = conn.execute(
+            """
+            SELECT c.id, c.phase_id, c.user_id, u.name as user_name, c.comment_text, c.created_at
+            FROM Phase_Comments c
+            JOIN Users u ON c.user_id = u.id
+            WHERE c.id = ?
+            """,
+            (new_id,)
+        ).fetchone()
+    
+    return dict(new_comment)
 
 
 # ---------------------------------------------------------------------------
