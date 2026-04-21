@@ -18,6 +18,9 @@
     <div class="container-fluid">
         <a class="navbar-brand fw-bold" href="#">PMO RPA Dashboard</a>
         <div class="d-flex align-items-center">
+            <button id="btn-admin-roles" class="btn btn-outline-light btn-sm fw-semibold me-2" data-bs-toggle="modal" data-bs-target="#adminRolesModal" style="display: none;">Administrar Roles</button>
+            <button id="btn-admin-project-types" class="btn btn-outline-light btn-sm fw-semibold me-2" data-bs-toggle="modal" data-bs-target="#adminProjectTypesModal" style="display: none;">Tipos de Proyecto</button>
+            <button id="btn-backlog" class="btn btn-outline-warning btn-sm fw-semibold me-2" data-bs-toggle="modal" data-bs-target="#backlogModal" style="display: none;">Ver Backlog</button>
             <button id="btn-logout" class="btn btn-outline-light btn-sm fw-semibold" style="display: none;">Cerrar Sesión</button>
         </div>
     </div>
@@ -147,6 +150,105 @@
     </div>
 </div>
 
+<!-- Admin Roles Modal -->
+<div class="modal fade" id="adminRolesModal" tabindex="-1" aria-labelledby="adminRolesModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-secondary text-white">
+                <h5 class="modal-title fw-bold" id="adminRolesModalLabel">Administrar Roles</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div id="roles-error-container"></div>
+                <div class="row">
+                    <!-- Create Role Form -->
+                    <div class="col-md-4 border-end">
+                        <h6 class="fw-bold mb-3">Crear Rol</h6>
+                        <form id="create-role-form">
+                            <div class="mb-3">
+                                <label class="form-label">Nombre del Rol</label>
+                                <input type="text" class="form-control form-control-sm" id="new-role-name" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Descripción</label>
+                                <input type="text" class="form-control form-control-sm" id="new-role-desc">
+                            </div>
+                            <button type="submit" class="btn btn-sm btn-primary w-100">Crear Rol</button>
+                        </form>
+                    </div>
+                    <!-- Roles Table -->
+                    <div class="col-md-8">
+                        <h6 class="fw-bold mb-3">Roles Existentes</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Nombre</th>
+                                        <th>Descripción</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="roles-table-body">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Admin Project Types Modal -->
+<div class="modal fade" id="adminProjectTypesModal" tabindex="-1" aria-labelledby="adminProjectTypesModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-secondary text-white">
+                <h5 class="modal-title fw-bold" id="adminProjectTypesModalLabel">Administrar Tipos de Proyecto</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div id="project-types-error-container"></div>
+                <div class="row">
+                    <!-- Create Project Type Form -->
+                    <div class="col-md-4 border-end">
+                        <h6 class="fw-bold mb-3">Crear Tipo de Proyecto</h6>
+                        <form id="create-project-type-form">
+                            <div class="mb-3">
+                                <label class="form-label">Nombre del Tipo</label>
+                                <input type="text" class="form-control form-control-sm" id="new-pt-name" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Descripción</label>
+                                <input type="text" class="form-control form-control-sm" id="new-pt-desc">
+                            </div>
+                            <button type="submit" class="btn btn-sm btn-primary w-100">Crear Tipo</button>
+                        </form>
+                    </div>
+                    <!-- Project Types Table -->
+                    <div class="col-md-8">
+                        <h6 class="fw-bold mb-3">Tipos Existentes</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Nombre</th>
+                                        <th>Descripción</th>
+                                        <th>Activo</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="project-types-table-body">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Gantt Modal -->
 <div class="modal fade" id="ganttModal" tabindex="-1" aria-labelledby="ganttModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl">
@@ -177,9 +279,20 @@
                         <input type="text" class="form-control" id="process-name" required>
                     </div>
                     <div class="mb-3">
+                        <label for="project-type" class="form-label">Tipo de Proyecto</label>
+                        <select class="form-select" id="project-type" required>
+                        </select>
+                    </div>
+                    <div class="mb-3">
                         <label for="assigned-developer" class="form-label">Desarrollador Asignado</label>
                         <select class="form-select" id="assigned-developer" required>
                             
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="commercial-id" class="form-label">Comercial Asignado (Opcional)</label>
+                        <select class="form-select" id="commercial-id">
+                            <option value="">Seleccione un comercial...</option>
                         </select>
                     </div>
                     <div class="mb-3">
@@ -248,6 +361,65 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Backlog Modal -->
+<div class="modal fade" id="backlogModal" tabindex="-1" aria-labelledby="backlogModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title fw-bold" id="backlogModalLabel">Backlog (Proyectos Eliminados)</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Proceso</th>
+                                <th>Desarrollador</th>
+                                <th>Estado de Salud</th>
+                                <th>Fecha Inicio</th>
+                                <th>Fecha Fin</th>
+                            </tr>
+                        </thead>
+                        <tbody id="backlog-table-body">
+                            <!-- Backlog projects injected dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Phase Comments Modal -->
+<div class="modal fade" id="phaseCommentsModal" tabindex="-1" aria-labelledby="phaseCommentsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title fw-bold" id="phaseCommentsModalLabel">Comentarios de Fase</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-4">
+                    <form id="create-comment-form">
+                        <input type="hidden" id="comment-phase-id">
+                        <div class="form-floating mb-2">
+                            <textarea class="form-control" placeholder="Escribe un comentario aquí" id="new-comment-text" style="height: 100px" required></textarea>
+                            <label for="new-comment-text">Nuevo Comentario</label>
+                        </div>
+                        <div class="text-end">
+                            <button type="submit" class="btn btn-sm btn-primary">Añadir Comentario</button>
+                        </div>
+                    </form>
+                </div>
+                <h6 class="fw-bold mb-3">Historial de Comentarios</h6>
+                <div class="list-group" id="comments-list">
+                    <!-- Comments injected dynamically -->
+                </div>
             </div>
         </div>
     </div>

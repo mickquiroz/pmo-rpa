@@ -379,6 +379,33 @@ def list_projects(current_user: dict = Depends(get_current_user)) -> List[dict]:
 
 
 # ---------------------------------------------------------------------------
+# GET /api/v1/projects/backlog
+# ---------------------------------------------------------------------------
+
+@app.get(
+    f"{API_PREFIX}/projects/backlog",
+    response_model=List[ProjectResponse],
+    tags=["Projects"],
+    summary="Lista todos los proyectos eliminados lógicamente (Solo PMO/Admin)",
+    status_code=status.HTTP_200_OK,
+)
+def list_projects_backlog(current_user: dict = Depends(get_current_user)) -> List[dict]:
+    """
+    Devuelve todos los proyectos eliminados lógicamente (is_deleted = 1).
+    Solo accesible por usuarios con rol PMO o Admin.
+    """
+    if current_user["role"] not in ["Admin", "PMO"]:
+         raise HTTPException(
+             status_code=status.HTTP_403_FORBIDDEN,
+             detail="Permisos insuficientes. Accesible solo para PMO o Admin."
+         )
+    
+    query = _PROGRESS_QUERY.replace("WHERE p.is_deleted = 0", "WHERE p.is_deleted = 1")
+    with get_db() as conn:
+        rows = conn.execute(query).fetchall()
+    return [dict(row) for row in rows]
+
+# ---------------------------------------------------------------------------
 # GET /api/v1/projects/{project_id}/phases
 # ---------------------------------------------------------------------------
 
