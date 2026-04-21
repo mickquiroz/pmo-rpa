@@ -64,6 +64,39 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
+
+# ---------------------------------------------------------------------------
+# Startup: Seed de permisos básicos
+# ---------------------------------------------------------------------------
+
+def seed_permissions() -> None:
+    """
+    Verifica e inserta los permisos semilla en la tabla Permissions.
+    Se ejecuta al arrancar la aplicación.
+    """
+    BASIC_PERMISSIONS = [
+        "write:projects",
+        "delete:projects",
+        "edit:phases",
+        "add:comments",
+    ]
+    with get_db() as conn:
+        for action in BASIC_PERMISSIONS:
+            existing = conn.execute(
+                "SELECT id FROM Permissions WHERE action = ?", (action,)
+            ).fetchone()
+            if not existing:
+                conn.execute(
+                    "INSERT INTO Permissions (action) VALUES (?)",
+                    (action,)
+                )
+        conn.commit()
+
+
+@app.on_event("startup")
+def on_startup() -> None:
+    seed_permissions()
+
 # ---------------------------------------------------------------------------
 # CORS — permite conexiones desde cualquier origen en el MVP local
 # ---------------------------------------------------------------------------
@@ -229,11 +262,20 @@ class UserResponse(BaseModel):
 class RoleCreate(BaseModel):
     name: str = Field(..., min_length=2)
     description: Optional[str] = None
+    permission_ids: Optional[List[int]] = []
 
 class RoleResponse(BaseModel):
     id: int
     name: str
     description: Optional[str]
+    permission_ids: List[int] = []
+
+    class Config:
+        from_attributes = True
+
+class PermissionResponse(BaseModel):
+    id: int
+    action: str
 
     class Config:
         from_attributes = True
@@ -294,17 +336,34 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
             """,
             (form_data.username,)
         ).fetchone()
-        
-    if not user or not verify_password(form_data.password, user["hashed_password"]):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Credenciales inválidas (email o contraseña incorrectos)",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-        
+
+        if not user or not verify_password(form_data.password, user["hashed_password"]):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Credenciales inválidas (email o contraseña incorrectos)",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        # Consultar los permisos asociados al rol del usuario via Role_Permissions → Permissions
+        perm_rows = conn.execute(
+            """
+            SELECT p.action
+            FROM Role_Permissions rp
+            JOIN Permissions p ON rp.permission_id = p.id
+            WHERE rp.role_id = ?
+            """,
+            (user["role_id"],)
+        ).fetchall()
+        permissions = [row["action"] for row in perm_rows]
+
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user["email"], "role": user["role"]}, expires_delta=access_token_expires
+        data={
+            "sub": user["email"],
+            "role": user["role"],
+            "permissions": permissions,
+        },
+        expires_delta=access_token_expires,
     )
     return {"access_token": access_token, "token_type": "bearer"}
 
@@ -956,37 +1015,76 @@ def delete_project(project_id: int, _: dict = Depends(get_admin_user)):
 # GET & POST /api/v1/roles
 # ---------------------------------------------------------------------------
 @app.get(
+    f"{API_PREFIX}/permissions",
+    response_model=List[PermissionResponse],
+    tags=["Permissions (Admin)"],
+    summary="Lista todos los permisos del sistema",
+    status_code=status.HTTP_200_OK,
+)
+def list_permissions(_: dict = Depends(get_admin_user)) -> List[dict]:
+    """Devuelve todos los permisos disponibles para asignar a roles."""
+    with get_db() as conn:
+        rows = conn.execute("SELECT id, action FROM Permissions ORDER BY id").fetchall()
+    return [dict(row) for row in rows]
+
+
+@app.get(
     f"{API_PREFIX}/roles",
     response_model=List[RoleResponse],
     tags=["Roles (Admin)"],
-    summary="Lista todos los roles",
+    summary="Lista todos los roles con sus permisos asignados",
     status_code=status.HTTP_200_OK,
 )
 def list_roles(_: dict = Depends(get_admin_user)) -> List[dict]:
+    """Devuelve todos los roles incluyendo los IDs de permisos asignados."""
     with get_db() as conn:
-        rows = conn.execute("SELECT id, name, description FROM Roles").fetchall()
-    return [dict(row) for row in rows]
+        roles = conn.execute("SELECT id, name, description FROM Roles ORDER BY id").fetchall()
+        result = []
+        for role in roles:
+            role_dict = dict(role)
+            perm_rows = conn.execute(
+                "SELECT permission_id FROM Role_Permissions WHERE role_id = ?",
+                (role_dict["id"],)
+            ).fetchall()
+            role_dict["permission_ids"] = [r["permission_id"] for r in perm_rows]
+            result.append(role_dict)
+    return result
 
 
 @app.post(
     f"{API_PREFIX}/roles",
     response_model=RoleResponse,
     tags=["Roles (Admin)"],
-    summary="Crea un rol",
+    summary="Crea un rol con permisos opcionales",
     status_code=status.HTTP_201_CREATED,
 )
 def create_role(payload: RoleCreate, _: dict = Depends(get_admin_user)) -> dict:
+    """Inserta un nuevo rol y mapea sus permisos en Role_Permissions."""
     with get_db() as conn:
         try:
             cursor = conn.execute(
                 "INSERT INTO Roles (name, description) VALUES (?, ?)",
                 (payload.name, payload.description)
             )
-            conn.commit()
             new_id = cursor.lastrowid
-            
+
+            # Insertar permisos en la tabla relacional si se proporcionaron
+            if payload.permission_ids:
+                conn.executemany(
+                    "INSERT OR IGNORE INTO Role_Permissions (role_id, permission_id) VALUES (?, ?)",
+                    [(new_id, pid) for pid in payload.permission_ids]
+                )
+
+            conn.commit()
+
             role = conn.execute("SELECT id, name, description FROM Roles WHERE id = ?", (new_id,)).fetchone()
-            return dict(role)
+            role_dict = dict(role)
+            perm_rows = conn.execute(
+                "SELECT permission_id FROM Role_Permissions WHERE role_id = ?",
+                (new_id,)
+            ).fetchall()
+            role_dict["permission_ids"] = [r["permission_id"] for r in perm_rows]
+            return role_dict
         except sqlite3.IntegrityError:
             raise HTTPException(status_code=400, detail="El nombre del rol ya existe.")
 

@@ -1,8 +1,9 @@
-// app.js - PMO RPA Dashboard MVP Final
+// app.js - PMO RPA Dashboard MVP Final — Fase 21: UI Dinámica por Permisos JWT
 
 // 1. Variables Globales y Autenticación
 let authToken = localStorage.getItem('token');
 let currentUserRole = localStorage.getItem('role');
+let currentUserPermissions = JSON.parse(localStorage.getItem('permissions') || '[]');
 let currentManageProjectId = null;
 
 function checkAuth() {
@@ -14,6 +15,8 @@ function checkAuth() {
             loginModal.show();
         }
     } else {
+        // Restaurar permisos desde localStorage en variable global
+        currentUserPermissions = JSON.parse(localStorage.getItem('permissions') || '[]');
         // Si hay token, aplicamos UI y cargamos datos
         applyRoleUI();
         fetchProjects();
@@ -50,7 +53,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (createPhaseForm) createPhaseForm.addEventListener('submit', handleCreatePhase);
 
     const btnAdminRoles = document.getElementById('btn-admin-roles');
-    if (btnAdminRoles) btnAdminRoles.addEventListener('click', fetchRoles);
+    if (btnAdminRoles) btnAdminRoles.addEventListener('click', () => {
+        fetchRoles();
+        fetchPermissions();
+    });
 
     const btnAdminProjectTypes = document.getElementById('btn-admin-project-types');
     if (btnAdminProjectTypes) btnAdminProjectTypes.addEventListener('click', fetchProjectTypes);
@@ -100,10 +106,12 @@ async function handleLogin(e) {
         authToken = data.access_token;
         localStorage.setItem('token', authToken);
 
-        // Decodificar JWT para obtener el rol
+        // Decodificar JWT para obtener el rol Y los permisos granulares
         const payload = JSON.parse(atob(authToken.split('.')[1]));
         currentUserRole = payload.role;
+        currentUserPermissions = Array.isArray(payload.permissions) ? payload.permissions : [];
         localStorage.setItem('role', currentUserRole);
+        localStorage.setItem('permissions', JSON.stringify(currentUserPermissions));
 
         // Ocultar Modal
         const modalEl = document.getElementById('loginModal');
@@ -123,43 +131,50 @@ async function handleLogin(e) {
 function handleLogout() {
     localStorage.removeItem('token');
     localStorage.removeItem('role');
+    localStorage.removeItem('permissions');
     window.location.reload();
 }
 
 function applyRoleUI() {
-    const btnCreate = document.getElementById('btn-create-project');
-    const btnExport = document.getElementById('btn-export');
-    const btnAdminUsers = document.getElementById('btn-admin-users');
-    const btnAdminRoles = document.getElementById('btn-admin-roles');
+    const btnCreate          = document.getElementById('btn-create-project');
+    const btnExport          = document.getElementById('btn-export');
+    const btnAdminUsers      = document.getElementById('btn-admin-users');
+    const btnAdminRoles      = document.getElementById('btn-admin-roles');
     const btnAdminProjectTypes = document.getElementById('btn-admin-project-types');
-    const btnBacklog = document.getElementById('btn-backlog');
-    const btnLogout = document.getElementById('btn-logout');
+    const btnBacklog         = document.getElementById('btn-backlog');
+    const btnLogout          = document.getElementById('btn-logout');
 
     if (btnLogout) btnLogout.style.display = 'inline-block';
 
-    // UI para Admin
-    if (currentUserRole === 'Admin') {
-        if (btnAdminUsers) btnAdminUsers.style.display = 'inline-block';
-        if (btnAdminRoles) btnAdminRoles.style.display = 'inline-block';
-        if (btnAdminProjectTypes) btnAdminProjectTypes.style.display = 'inline-block';
-    } else {
-        if (btnAdminUsers) btnAdminUsers.style.display = 'none';
-        if (btnAdminRoles) btnAdminRoles.style.display = 'none';
-        if (btnAdminProjectTypes) btnAdminProjectTypes.style.display = 'none';
+    // ── Panel de Super-Admin (Usuarios, Roles, Tipos): sólo usuarios con rol 'Admin'.
+    // Respaldo explícito por rol para el panel administrativo superior.
+    const isAdmin = (currentUserRole === 'Admin');
+    if (btnAdminUsers)       btnAdminUsers.style.display       = isAdmin ? 'inline-block' : 'none';
+    if (btnAdminRoles)       btnAdminRoles.style.display       = isAdmin ? 'inline-block' : 'none';
+    if (btnAdminProjectTypes) btnAdminProjectTypes.style.display = isAdmin ? 'inline-block' : 'none';
+
+    // ── Acciones Operativas: COMPLETAMENTE dictadas por el array de permisos del JWT ──
+
+    // Botón "Crear Proyecto"
+    if (btnCreate) {
+        btnCreate.style.display = currentUserPermissions.includes('write:projects') ? 'inline-block' : 'none';
     }
 
-    // UI para Admin y PMO
-    if (currentUserRole === 'Admin' || currentUserRole === 'PMO') {
-        if (btnCreate) btnCreate.style.display = 'inline-block';
-        if (btnExport) btnExport.style.display = 'inline-block';
-        if (btnBacklog) btnBacklog.style.display = 'inline-block';
+    // Botón "Exportar CSV"
+    if (btnExport) {
+        btnExport.style.display = currentUserPermissions.includes('write:projects') ? 'inline-block' : 'none';
+    }
+
+    // Botón "Backlog"
+    if (btnBacklog) {
+        btnBacklog.style.display = currentUserPermissions.includes('write:projects') ? 'inline-block' : 'none';
+    }
+
+    // Poblar selects del formulario de creación de proyecto sólo si el usuario puede crearlos
+    if (currentUserPermissions.includes('write:projects')) {
         populateDevelopersSelect();
         populateProjectTypesSelect();
         populateCommercialSelect();
-    } else {
-        if (btnCreate) btnCreate.style.display = 'none';
-        if (btnExport) btnExport.style.display = 'none';
-        if (btnBacklog) btnBacklog.style.display = 'none';
     }
 }
 
@@ -278,7 +293,8 @@ function renderProjects(projects) {
         const progress = Math.round(project.progress_percentage);
         let progressColorClass = progress === 100 ? 'bg-success' : 'bg-primary';
 
-        const deleteBtn = currentUserRole === 'Admin'
+        // Botón de eliminar proyecto dictado por permiso 'delete:projects'
+        const deleteBtn = currentUserPermissions.includes('delete:projects')
             ? `<button class="btn btn-sm btn-danger ms-1" onclick="deleteProject(${project.id})">Eliminar</button>`
             : '';
 
@@ -350,9 +366,14 @@ async function openManagePhases(projectId) {
         if (response.status === 401) { handleLogout(); return; }
         const phases = await response.json();
 
+        // Panel de creación de fases: sólo si el usuario puede escribir proyectos/fases
+        const canWriteProjects = currentUserPermissions.includes('write:projects');
+        const canDeleteProjects = currentUserPermissions.includes('delete:projects');
+        const canEditPhases = currentUserPermissions.includes('edit:phases');
+
         const createPhaseContainer = document.getElementById('create-phase-container');
         if (createPhaseContainer) {
-            createPhaseContainer.style.display = currentUserRole === 'Developer' ? 'none' : 'block';
+            createPhaseContainer.style.display = canWriteProjects ? 'block' : 'none';
         }
 
         const tbody = document.getElementById('phases-table-body');
@@ -360,12 +381,12 @@ async function openManagePhases(projectId) {
 
         phases.forEach(p => {
             const tr = document.createElement('tr');
-            const isDev = currentUserRole === 'Developer';
-            const isPMO = currentUserRole === 'PMO';
 
-            const dateDisabled = isDev ? 'disabled' : '';
-            const statusDisabled = isPMO ? 'disabled' : '';
-            const detailsDisabled = isDev ? 'disabled' : '';
+            // Las fechas y detalles estructurales solo editables si puede escribir proyectos
+            const dateDisabled    = canWriteProjects ? '' : 'disabled';
+            // El estado sólo editable si tiene permiso 'edit:phases'
+            const statusDisabled  = canEditPhases    ? '' : 'disabled';
+            const detailsDisabled = canWriteProjects ? '' : 'disabled';
 
             tr.innerHTML = `
                 <td><input type="text" class="form-control form-control-sm phase-name" value="${p.phase_name}" ${detailsDisabled}></td>
@@ -374,14 +395,14 @@ async function openManagePhases(projectId) {
                 <td><input type="date" class="form-control form-control-sm date-end" value="${p.estimated_end_date}" ${dateDisabled}></td>
                 <td>
                     <select class="form-select form-select-sm status-select" ${statusDisabled}>
-                        <option value="Pending" ${p.status === 'Pending' ? 'selected' : 'Pending'}>Pending</option>
+                        <option value="Pending" ${p.status === 'Pending' ? 'selected' : ''}>Pending</option>
                         <option value="In Progress" ${p.status === 'In Progress' ? 'selected' : ''}>In Progress</option>
                         <option value="Completed" ${p.status === 'Completed' ? 'selected' : ''}>Completed</option>
                     </select>
                 </td>
                 <td>
                     <button class="btn btn-sm btn-success" onclick="updatePhase(${p.id}, this)">Guardar</button>
-                    ${!isDev ? `<button class="btn btn-sm btn-danger ms-1" onclick="deletePhase(${p.id})">Eliminar</button>` : ''}
+                    ${canDeleteProjects ? `<button class="btn btn-sm btn-danger ms-1" onclick="deletePhase(${p.id})">Eliminar</button>` : ''}
                     <button class="btn btn-sm btn-info ms-1 text-white" onclick="openPhaseComments(${p.id})">Comentarios</button>
                 </td>
             `;
@@ -406,7 +427,8 @@ async function updatePhase(phaseId, btnElement) {
     const newWeight = phaseWeightInput ? parseInt(phaseWeightInput.value, 10) : null;
 
     try {
-        if (currentUserRole === 'Admin' || currentUserRole === 'PMO') {
+        // Actualizar fechas y detalles estructurales si el usuario tiene permiso 'write:projects'
+        if (currentUserPermissions.includes('write:projects')) {
             await fetch(`/api/v1/phases/${phaseId}/dates`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
@@ -418,7 +440,8 @@ async function updatePhase(phaseId, btnElement) {
                 body: JSON.stringify({ phase_name: newName, weight_percentage: newWeight })
             });
         }
-        if (currentUserRole === 'Admin' || currentUserRole === 'Developer') {
+        // Actualizar estado si el usuario tiene permiso 'edit:phases'
+        if (currentUserPermissions.includes('edit:phases')) {
             await fetch(`/api/v1/phases/${phaseId}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
@@ -617,7 +640,7 @@ async function createPhaseComment(e) {
 // -------------------------------------------------------------------------
 
 async function fetchUsers() {
-    if (currentUserRole !== 'Admin') return;
+    if (currentUserRole !== 'Admin') return; // Panel IAM sólo Admin (respaldo por rol)
     try {
         const response = await fetch('/api/v1/users', { headers: { 'Authorization': 'Bearer ' + authToken } });
         if (response.status === 401) { handleLogout(); return; }
@@ -754,7 +777,7 @@ async function exportCSV() {
 // -------------------------------------------------------------------------
 
 async function fetchRoles() {
-    if (currentUserRole !== 'Admin') return;
+    if (currentUserRole !== 'Admin') return; // Panel Super-Admin sólo Admin (respaldo por rol)
     try {
         const response = await fetch('/api/v1/roles', { headers: { 'Authorization': 'Bearer ' + authToken } });
         if (response.status === 401) { handleLogout(); return; }
@@ -765,10 +788,14 @@ async function fetchRoles() {
 
         roles.forEach(role => {
             const tr = document.createElement('tr');
+            const permBadges = role.permission_ids && role.permission_ids.length
+                ? role.permission_ids.map(pid => `<span class="badge bg-info text-dark me-1">${pid}</span>`).join('')
+                : '<small class="text-muted">Sin permisos</small>';
             tr.innerHTML = `
                 <td>${role.id}</td>
                 <td>${role.name}</td>
                 <td>${role.description || ''}</td>
+                <td>${permBadges}</td>
             `;
             tbody.appendChild(tr);
         });
@@ -782,11 +809,15 @@ async function createRole(e) {
     const errorContainer = document.getElementById('roles-error-container');
     errorContainer.innerHTML = '';
 
+    // Collect checked permission IDs
+    const checkedBoxes = document.querySelectorAll('#permissions-checkboxes input[type="checkbox"]:checked');
+    const permission_ids = Array.from(checkedBoxes).map(cb => parseInt(cb.value, 10));
+
     try {
         const response = await fetch('/api/v1/roles', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
-            body: JSON.stringify({ name, description })
+            body: JSON.stringify({ name, description, permission_ids })
         });
         if (response.status === 401) { handleLogout(); return; }
         if (!response.ok) {
@@ -795,14 +826,57 @@ async function createRole(e) {
         }
 
         document.getElementById('create-role-form').reset();
+        // Uncheck all permission checkboxes after reset
+        document.querySelectorAll('#permissions-checkboxes input[type="checkbox"]').forEach(cb => cb.checked = false);
         fetchRoles();
     } catch (error) { 
         errorContainer.innerHTML = `<div class="alert alert-danger py-2 mb-3">${error.message}</div>`;
     }
 }
 
+// -------------------------------------------------------------------------
+// MÓDULO: fetchPermissions — genera checkboxes dinámicos de permisos
+// -------------------------------------------------------------------------
+
+async function fetchPermissions() {
+    if (currentUserRole !== 'Admin') return; // Panel Super-Admin sólo Admin (respaldo por rol)
+    const container = document.getElementById('permissions-checkboxes');
+    if (!container) return;
+
+    try {
+        const response = await fetch('/api/v1/permissions', {
+            headers: { 'Authorization': 'Bearer ' + authToken }
+        });
+        if (response.status === 401) { handleLogout(); return; }
+        if (!response.ok) throw new Error('Error al obtener permisos');
+
+        const permissions = await response.json();
+        container.innerHTML = '';
+
+        if (permissions.length === 0) {
+            container.innerHTML = '<small class="text-muted">No hay permisos definidos.</small>';
+            return;
+        }
+
+        permissions.forEach(perm => {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'form-check';
+            wrapper.innerHTML = `
+                <input class="form-check-input" type="checkbox" value="${perm.id}" id="perm-check-${perm.id}">
+                <label class="form-check-label" for="perm-check-${perm.id}">
+                    <code class="text-primary">${perm.action}</code>
+                </label>
+            `;
+            container.appendChild(wrapper);
+        });
+    } catch (error) {
+        console.error('Error al cargar permisos:', error);
+        if (container) container.innerHTML = '<small class="text-danger">No se pudieron cargar los permisos.</small>';
+    }
+}
+
 async function fetchProjectTypes() {
-    if (currentUserRole !== 'Admin') return;
+    if (currentUserRole !== 'Admin') return; // Panel Super-Admin sólo Admin (respaldo por rol)
     try {
         const response = await fetch('/api/v1/project-types', { headers: { 'Authorization': 'Bearer ' + authToken } });
         if (response.status === 401) { handleLogout(); return; }
