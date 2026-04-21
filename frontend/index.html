@@ -209,11 +209,31 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
+                <div id="create-phase-container" class="card p-3 mb-3 bg-light">
+                    <form id="create-phase-form" class="row gx-2 gy-2 align-items-center">
+                        <div class="col-sm-3">
+                            <input type="text" class="form-control form-control-sm" id="new-phase-name" placeholder="Nombre de Fase" required>
+                        </div>
+                        <div class="col-sm-2">
+                            <input type="number" class="form-control form-control-sm" id="new-phase-weight" placeholder="Peso (%)" min="0" max="100" required>
+                        </div>
+                        <div class="col-sm-3">
+                            <input type="date" class="form-control form-control-sm" id="new-phase-start" required>
+                        </div>
+                        <div class="col-sm-2">
+                            <input type="date" class="form-control form-control-sm" id="new-phase-end" required>
+                        </div>
+                        <div class="col-sm-2">
+                            <button type="submit" class="btn btn-sm btn-primary w-100">Añadir Fase</button>
+                        </div>
+                    </form>
+                </div>
                 <div class="table-responsive">
                     <table class="table table-hover align-middle">
                         <thead class="table-light">
                             <tr>
                                 <th>Fase</th>
+                                <th>Peso (%)</th>
                                 <th>Fecha Inicio</th>
                                 <th>Fecha Fin</th>
                                 <th>Estado</th>

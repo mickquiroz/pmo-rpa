@@ -1,3 +1,5 @@
+uvicorn api.main:app --reload
+
 Entra a http://127.0.0.1:8000 y realiza este circuito de pruebas:
 
 El Rol Admin: Inicia sesión con admin@empresa.com / admin123. Ve a "Administrar Usuarios", crea un nuevo Developer y un nuevo PMO. Cierra sesión.

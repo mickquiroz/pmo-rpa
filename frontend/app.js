@@ -3,6 +3,7 @@
 // 1. Variables Globales y Autenticación
 let authToken = localStorage.getItem('token');
 let currentUserRole = localStorage.getItem('role');
+let currentManageProjectId = null;
 
 function checkAuth() {
     if (!authToken) {
@@ -41,6 +42,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const createProjectForm = document.getElementById('create-project-form');
     if (createProjectForm) createProjectForm.addEventListener('submit', handleCreateProject);
+
+    const createPhaseForm = document.getElementById('create-phase-form');
+    if (createPhaseForm) createPhaseForm.addEventListener('submit', handleCreatePhase);
 });
 
 // -------------------------------------------------------------------------
@@ -253,12 +257,18 @@ async function showProjectGantt(projectId, projectName) {
 }
 
 async function openManagePhases(projectId) {
+    currentManageProjectId = projectId;
     try {
         const response = await fetch(`/api/v1/projects/${projectId}/phases`, {
             headers: { 'Authorization': 'Bearer ' + authToken }
         });
         if (response.status === 401) { handleLogout(); return; }
         const phases = await response.json();
+
+        const createPhaseContainer = document.getElementById('create-phase-container');
+        if (createPhaseContainer) {
+            createPhaseContainer.style.display = currentUserRole === 'Developer' ? 'none' : 'block';
+        }
 
         const tbody = document.getElementById('phases-table-body');
         tbody.innerHTML = '';
@@ -270,20 +280,23 @@ async function openManagePhases(projectId) {
 
             const dateDisabled = isDev ? 'disabled' : '';
             const statusDisabled = isPMO ? 'disabled' : '';
+            const detailsDisabled = isDev ? 'disabled' : '';
 
             tr.innerHTML = `
-                <td class="fw-bold">${p.phase_name}</td>
+                <td><input type="text" class="form-control form-control-sm phase-name" value="${p.phase_name}" ${detailsDisabled}></td>
+                <td><input type="number" class="form-control form-control-sm phase-weight" value="${p.weight_percentage || 0}" min="0" max="100" ${detailsDisabled}></td>
                 <td><input type="date" class="form-control form-control-sm date-start" value="${p.start_date}" ${dateDisabled}></td>
                 <td><input type="date" class="form-control form-control-sm date-end" value="${p.estimated_end_date}" ${dateDisabled}></td>
                 <td>
                     <select class="form-select form-select-sm status-select" ${statusDisabled}>
-                        <option value="Pending" ${p.status === 'Pending' ? 'selected' : ''}>Pending</option>
+                        <option value="Pending" ${p.status === 'Pending' ? 'selected' : 'Pending'}>Pending</option>
                         <option value="In Progress" ${p.status === 'In Progress' ? 'selected' : ''}>In Progress</option>
                         <option value="Completed" ${p.status === 'Completed' ? 'selected' : ''}>Completed</option>
                     </select>
                 </td>
                 <td>
                     <button class="btn btn-sm btn-success" onclick="updatePhase(${p.id}, this)">Guardar</button>
+                    ${!isDev ? `<button class="btn btn-sm btn-danger ms-1" onclick="deletePhase(${p.id})">Eliminar</button>` : ''}
                 </td>
             `;
             tbody.appendChild(tr);
@@ -300,6 +313,11 @@ async function updatePhase(phaseId, btnElement) {
     const newStart = row.querySelector('.date-start').value;
     const newEnd = row.querySelector('.date-end').value;
     const newStatus = row.querySelector('.status-select').value;
+    
+    const phaseNameInput = row.querySelector('.phase-name');
+    const phaseWeightInput = row.querySelector('.phase-weight');
+    const newName = phaseNameInput ? phaseNameInput.value : null;
+    const newWeight = phaseWeightInput ? parseInt(phaseWeightInput.value, 10) : null;
 
     try {
         if (currentUserRole === 'Admin' || currentUserRole === 'PMO') {
@@ -307,6 +325,11 @@ async function updatePhase(phaseId, btnElement) {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
                 body: JSON.stringify({ start_date: newStart, estimated_end_date: newEnd })
+            });
+            await fetch(`/api/v1/phases/${phaseId}/details`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
+                body: JSON.stringify({ phase_name: newName, weight_percentage: newWeight })
             });
         }
         if (currentUserRole === 'Admin' || currentUserRole === 'Developer') {
@@ -321,6 +344,55 @@ async function updatePhase(phaseId, btnElement) {
     } catch (error) {
         console.error(error);
         alert('Error al actualizar fase');
+    }
+}
+
+async function deletePhase(phaseId) {
+    if (!confirm('¿Seguro que deseas eliminar esta fase?')) return;
+    try {
+        const response = await fetch(`/api/v1/phases/${phaseId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': 'Bearer ' + authToken }
+        });
+        if (response.status === 401) { handleLogout(); return; }
+        if (!response.ok) throw new Error('Error al eliminar fase');
+        
+        openManagePhases(currentManageProjectId);
+        fetchProjects();
+    } catch (error) {
+        alert(error.message);
+    }
+}
+
+async function handleCreatePhase(e) {
+    e.preventDefault();
+    if (!currentManageProjectId) return;
+
+    const phaseName = document.getElementById('new-phase-name').value;
+    const weight = parseInt(document.getElementById('new-phase-weight').value, 10);
+    const startDate = document.getElementById('new-phase-start').value;
+    const endDate = document.getElementById('new-phase-end').value;
+
+    try {
+        const response = await fetch('/api/v1/phases', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
+            body: JSON.stringify({
+                project_id: currentManageProjectId,
+                phase_name: phaseName,
+                weight_percentage: weight,
+                start_date: startDate,
+                estimated_end_date: endDate
+            })
+        });
+        if (response.status === 401) { handleLogout(); return; }
+        if (!response.ok) throw new Error('Error al crear fase');
+
+        document.getElementById('create-phase-form').reset();
+        openManagePhases(currentManageProjectId);
+        fetchProjects();
+    } catch (error) {
+        alert(error.message);
     }
 }
 
