@@ -1,0 +1,30 @@
+# Agentic Assistant
+.agents/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+.env
+
+# Database
+data/*.db
+data/*.db-journal
+data/*.db-shm
+data/*.db-wal
+
+# Frontend / Web
+node_modules/
+dist/
+.DS_Store
+
+# Scratch / Temp
+scratch/
+cred.txt
+test.py
+seed_demo.py
+scratch_db_update.py
+update_app.py

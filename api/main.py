@@ -79,6 +79,7 @@ def seed_permissions() -> None:
         "delete:projects",
         "edit:phases",
         "add:comments",
+        "read:projects",
     ]
     with get_db() as conn:
         for action in BASIC_PERMISSIONS:
@@ -264,6 +265,11 @@ class RoleCreate(BaseModel):
     description: Optional[str] = None
     permission_ids: Optional[List[int]] = []
 
+class RoleUpdate(BaseModel):
+    name: str = Field(..., min_length=2)
+    description: Optional[str] = None
+    permission_ids: Optional[List[int]] = []
+
 class RoleResponse(BaseModel):
     id: int
     name: str
@@ -429,7 +435,7 @@ def list_projects(current_user: dict = Depends(get_current_user)) -> List[dict]:
         if current_user["role"] == "Developer":
             query = _PROGRESS_QUERY.replace("WHERE p.is_deleted = 0", "WHERE p.is_deleted = 0 AND p.assigned_developer_id = ?")
             rows = conn.execute(query, (current_user["id"],)).fetchall()
-        elif current_user["role"] == "Pre-Sales Viewer":
+        elif current_user["role"] == "Pre-Sales":
             query = _PROGRESS_QUERY.replace("WHERE p.is_deleted = 0", "WHERE p.is_deleted = 0 AND p.commercial_id = ?")
             rows = conn.execute(query, (current_user["id"],)).fetchall()
         else:
@@ -1087,6 +1093,78 @@ def create_role(payload: RoleCreate, _: dict = Depends(get_admin_user)) -> dict:
             return role_dict
         except sqlite3.IntegrityError:
             raise HTTPException(status_code=400, detail="El nombre del rol ya existe.")
+
+@app.put(
+    f"{API_PREFIX}/roles/{{role_id}}",
+    response_model=RoleResponse,
+    tags=["Roles (Admin)"],
+    summary="Actualiza un rol y sus permisos (Solo Admin)",
+    status_code=status.HTTP_200_OK,
+)
+def update_role(role_id: int, payload: RoleUpdate, _: dict = Depends(get_admin_user)) -> dict:
+    """Actualiza los datos de un rol y refresca sus permisos en Role_Permissions."""
+    with get_db() as conn:
+        role = conn.execute("SELECT id FROM Roles WHERE id = ?", (role_id,)).fetchone()
+        if not role:
+            raise HTTPException(status_code=404, detail="Rol no encontrado.")
+        
+        try:
+            # Actualizar nombre y descripción
+            conn.execute(
+                "UPDATE Roles SET name = ?, description = ? WHERE id = ?",
+                (payload.name, payload.description, role_id)
+            )
+
+            # Refrescar permisos: borrar e insertar
+            conn.execute("DELETE FROM Role_Permissions WHERE role_id = ?", (role_id,))
+            if payload.permission_ids:
+                conn.executemany(
+                    "INSERT INTO Role_Permissions (role_id, permission_id) VALUES (?, ?)",
+                    [(role_id, pid) for pid in payload.permission_ids]
+                )
+            
+            conn.commit()
+
+            # Devolver el rol actualizado
+            updated = conn.execute("SELECT id, name, description FROM Roles WHERE id = ?", (role_id,)).fetchone()
+            role_dict = dict(updated)
+            perm_rows = conn.execute(
+                "SELECT permission_id FROM Role_Permissions WHERE role_id = ?",
+                (role_id,)
+            ).fetchall()
+            role_dict["permission_ids"] = [r["permission_id"] for r in perm_rows]
+            return role_dict
+
+        except sqlite3.IntegrityError:
+            raise HTTPException(status_code=400, detail="El nombre del rol ya existe o hay un error de integridad.")
+
+@app.delete(
+    f"{API_PREFIX}/roles/{{role_id}}",
+    tags=["Roles (Admin)"],
+    summary="Elimina un rol (Solo Admin)",
+    status_code=status.HTTP_200_OK,
+)
+def delete_role(role_id: int, _: dict = Depends(get_admin_user)):
+    """Elimina un rol si no tiene usuarios asociados."""
+    with get_db() as conn:
+        role = conn.execute("SELECT id FROM Roles WHERE id = ?", (role_id,)).fetchone()
+        if not role:
+            raise HTTPException(status_code=404, detail="Rol no encontrado.")
+
+        # Regla de negocio estricta: No borrar si tiene usuarios
+        count = conn.execute("SELECT count(id) FROM Users WHERE role_id = ?", (role_id,)).fetchone()[0]
+        if count > 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"No se puede eliminar el rol: tiene {count} usuarios asignados."
+            )
+
+        # Borrar permisos asociados y luego el rol
+        conn.execute("DELETE FROM Role_Permissions WHERE role_id = ?", (role_id,))
+        conn.execute("DELETE FROM Roles WHERE id = ?", (role_id,))
+        conn.commit()
+
+    return {"message": f"Rol {role_id} eliminado exitosamente."}
 
 
 # ---------------------------------------------------------------------------

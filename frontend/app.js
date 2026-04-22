@@ -5,6 +5,8 @@ let authToken = localStorage.getItem('token');
 let currentUserRole = localStorage.getItem('role');
 let currentUserPermissions = JSON.parse(localStorage.getItem('permissions') || '[]');
 let currentManageProjectId = null;
+let editingRoleId = null; // Estado para edición de roles
+let allPermissions = [];  // Caché de permisos para mapeo de nombres
 
 function checkAuth() {
     if (!authToken) {
@@ -54,6 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const btnAdminRoles = document.getElementById('btn-admin-roles');
     if (btnAdminRoles) btnAdminRoles.addEventListener('click', () => {
+        resetRoleForm();
         fetchRoles();
         fetchPermissions();
     });
@@ -238,7 +241,7 @@ async function populateCommercialSelect() {
         
         if (select) {
             select.innerHTML = '<option value="">Seleccione un comercial...</option>';
-            users.filter(u => u.role_name === 'Pre-Sales Viewer' && u.is_active).forEach(u => {
+            users.filter(u => u.role_name === 'Pre-Sales' && u.is_active).forEach(u => {
                 const option = document.createElement('option');
                 option.value = u.id;
                 option.textContent = `${u.name} (${u.email})`;
@@ -308,8 +311,12 @@ function renderProjects(projects) {
                 </div>
             </td>
             <td>
-                <button class="btn btn-sm btn-outline-primary me-1" onclick="showProjectGantt(${project.id}, '${project.process_name}')">Ver Gantt</button>
-                <button class="btn btn-sm btn-outline-secondary" onclick="openManagePhases(${project.id})">Editar Fases</button>
+                ${currentUserPermissions.includes('read:projects') 
+                    ? `<button class="btn btn-sm btn-outline-primary me-1" onclick="showProjectGantt(${project.id}, '${project.process_name}')">Ver Gantt</button>` 
+                    : ''}
+                ${currentUserPermissions.includes('edit:phases') || currentUserPermissions.includes('write:projects') 
+                    ? `<button class="btn btn-sm btn-outline-secondary" onclick="openManagePhases(${project.id})">Editar Fases</button>` 
+                    : ''}
                 ${deleteBtn}
             </td>
         `;
@@ -346,7 +353,15 @@ async function showProjectGantt(projectId, projectName) {
                 };
             });
 
-            new Gantt('#gantt-target', tasks, { view_mode: 'Month', language: 'es' });
+            new Gantt('#gantt-target', tasks, {
+                view_mode: 'Month',
+                language: 'es',
+                on_click: function (task) {
+                    // task.id tiene formato "Phase_X" — extraemos el entero X
+                    const phaseId = parseInt(task.id.split('_')[1], 10);
+                    openPhaseComments(phaseId);
+                }
+            });
         }
 
         document.getElementById('ganttModalLabel').innerText = `Gantt: ${projectName}`;
@@ -788,14 +803,33 @@ async function fetchRoles() {
 
         roles.forEach(role => {
             const tr = document.createElement('tr');
+            
+            // Mapear IDs de permisos a nombres legibles usando la caché global
             const permBadges = role.permission_ids && role.permission_ids.length
-                ? role.permission_ids.map(pid => `<span class="badge bg-info text-dark me-1">${pid}</span>`).join('')
+                ? role.permission_ids.map(pid => {
+                    const perm = allPermissions.find(p => p.id === pid);
+                    return `<span class="badge bg-info text-dark me-1" title="ID: ${pid}">${perm ? perm.action : pid}</span>`;
+                }).join('')
                 : '<small class="text-muted">Sin permisos</small>';
+            
+            // Botones de acción (Editar / Eliminar)
+            const actions = `
+                <div class="d-flex gap-1">
+                    <button class="btn btn-xs btn-outline-primary" onclick='editRole(${JSON.stringify(role)})'>
+                        Editar
+                    </button>
+                    <button class="btn btn-xs btn-outline-danger" onclick="deleteRole(${role.id})">
+                        Borrar
+                    </button>
+                </div>
+            `;
+
             tr.innerHTML = `
                 <td>${role.id}</td>
                 <td>${role.name}</td>
                 <td>${role.description || ''}</td>
                 <td>${permBadges}</td>
+                <td>${actions}</td>
             `;
             tbody.appendChild(tr);
         });
@@ -807,29 +841,112 @@ async function createRole(e) {
     const name = document.getElementById('new-role-name').value;
     const description = document.getElementById('new-role-desc').value;
     const errorContainer = document.getElementById('roles-error-container');
+    const submitBtn = e.target.querySelector('button[type="submit"]');
     errorContainer.innerHTML = '';
 
     // Collect checked permission IDs
     const checkedBoxes = document.querySelectorAll('#permissions-checkboxes input[type="checkbox"]:checked');
     const permission_ids = Array.from(checkedBoxes).map(cb => parseInt(cb.value, 10));
 
+    const method = editingRoleId ? 'PUT' : 'POST';
+    const url = editingRoleId ? `/api/v1/roles/${editingRoleId}` : '/api/v1/roles';
+
     try {
-        const response = await fetch('/api/v1/roles', {
-            method: 'POST',
+        const response = await fetch(url, {
+            method: method,
             headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
             body: JSON.stringify({ name, description, permission_ids })
         });
         if (response.status === 401) { handleLogout(); return; }
         if (!response.ok) {
             const errData = await response.json();
-            throw new Error(errData.detail || 'Error al crear rol');
+            throw new Error(errData.detail || 'Error al procesar rol');
         }
 
-        document.getElementById('create-role-form').reset();
-        // Uncheck all permission checkboxes after reset
-        document.querySelectorAll('#permissions-checkboxes input[type="checkbox"]').forEach(cb => cb.checked = false);
+        resetRoleForm();
         fetchRoles();
     } catch (error) { 
+        errorContainer.innerHTML = `<div class="alert alert-danger py-2 mb-3">${error.message}</div>`;
+    }
+}
+
+function editRole(role) {
+    const formTitle = document.querySelector('#adminRolesModal .col-md-4 h6');
+    if (formTitle) formTitle.innerText = 'Editar Rol';
+    
+    // Scroll al formulario (opcional)
+    document.getElementById('create-role-form').scrollIntoView({ behavior: 'smooth' });
+
+    // Llenar campos
+    document.getElementById('new-role-name').value = role.name;
+    document.getElementById('new-role-desc').value = role.description || '';
+    
+    // Limpiar checkboxes
+    document.querySelectorAll('#permissions-checkboxes input[type="checkbox"]').forEach(cb => cb.checked = false);
+    
+    // Marcar permisos del rol
+    if (role.permission_ids) {
+        role.permission_ids.forEach(pid => {
+            const cb = document.getElementById(`perm-check-${pid}`);
+            if (cb) cb.checked = true;
+        });
+    }
+
+    // Cambiar estado a edición
+    submitBtn.classList.add('btn-warning');
+
+    // Mostrar botón cancelar si no existe
+    let cancelBtn = document.getElementById('btn-cancel-role-edit');
+    if (cancelBtn) cancelBtn.style.display = 'inline-block';
+}
+
+function resetRoleForm() {
+    editingRoleId = null;
+    const form = document.getElementById('create-role-form');
+    if (form) form.reset();
+    
+    const formTitle = document.querySelector('#adminRolesModal .col-md-4 h6');
+    if (formTitle) formTitle.innerText = 'Crear Rol';
+
+    const submitBtn = document.querySelector('#create-role-form button[type="submit"]');
+    if (submitBtn) {
+        submitBtn.innerText = 'Crear Rol';
+        submitBtn.classList.remove('btn-warning');
+        submitBtn.classList.add('btn-primary');
+    }
+
+    // Limpiar checkboxes
+    document.querySelectorAll('#permissions-checkboxes input[type="checkbox"]').forEach(cb => cb.checked = false);
+    
+    // Ocultar botón cancelar
+    const cancelBtn = document.getElementById('btn-cancel-role-edit');
+    if (cancelBtn) cancelBtn.style.display = 'none';
+
+    const errorContainer = document.getElementById('roles-error-container');
+    if (errorContainer) errorContainer.innerHTML = '';
+}
+
+async function deleteRole(id) {
+    if (!confirm('¿Seguro que deseas eliminar este rol? Esta acción no se puede deshacer.')) return;
+    
+    const errorContainer = document.getElementById('roles-error-container');
+    errorContainer.innerHTML = '';
+
+    try {
+        const response = await fetch(`/api/v1/roles/${id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': 'Bearer ' + authToken }
+        });
+
+        if (response.status === 401) { handleLogout(); return; }
+        
+        if (!response.ok) {
+            const errData = await response.json();
+            throw new Error(errData.detail || 'Error al eliminar rol');
+        }
+
+        fetchRoles();
+    } catch (error) {
         errorContainer.innerHTML = `<div class="alert alert-danger py-2 mb-3">${error.message}</div>`;
     }
 }
@@ -851,6 +968,7 @@ async function fetchPermissions() {
         if (!response.ok) throw new Error('Error al obtener permisos');
 
         const permissions = await response.json();
+        allPermissions = permissions; // Guardar en caché global
         container.innerHTML = '';
 
         if (permissions.length === 0) {
