@@ -435,7 +435,7 @@ def list_projects(current_user: dict = Depends(get_current_user)) -> List[dict]:
         if current_user["role"] == "Developer":
             query = _PROGRESS_QUERY.replace("WHERE p.is_deleted = 0", "WHERE p.is_deleted = 0 AND p.assigned_developer_id = ?")
             rows = conn.execute(query, (current_user["id"],)).fetchall()
-        elif current_user["role"] == "Pre-Sales":
+        elif current_user["role"] == "Pre-sales" or "sales" in current_user["role"].lower():
             query = _PROGRESS_QUERY.replace("WHERE p.is_deleted = 0", "WHERE p.is_deleted = 0 AND p.commercial_id = ?")
             rows = conn.execute(query, (current_user["id"],)).fetchall()
         else:
@@ -945,6 +945,35 @@ def list_developers(current_user: dict = Depends(get_current_user)) -> List[dict
             FROM Users u
             JOIN Roles r ON u.role_id = r.id
             WHERE r.name = 'Developer' AND u.is_active = 1
+            """
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/users/commercials
+# ---------------------------------------------------------------------------
+
+@app.get(
+    f"{API_PREFIX}/users/commercials",
+    response_model=List[UserResponse],
+    tags=["Users (PMO/Admin)"],
+    summary="Lista todos los comerciales (Solo Admin/PMO)",
+    status_code=status.HTTP_200_OK,
+)
+def list_commercials(current_user: dict = Depends(get_current_user)) -> List[dict]:
+    """Devuelve la lista de comerciales activos (rol Pre-sales o similar)."""
+    if current_user["role"] == "Developer":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permisos insuficientes. Accesible solo para PMO o Admin."
+        )
+    with get_db() as conn:
+        rows = conn.execute(
+            """
+            SELECT u.id, u.name, u.email, u.role_id, r.name as role_name, u.is_active 
+            FROM Users u
+            JOIN Roles r ON u.role_id = r.id
+            WHERE (r.name = 'Pre-sales' OR r.name LIKE '%sales%') AND u.is_active = 1
             """
         ).fetchall()
     return [dict(row) for row in rows]

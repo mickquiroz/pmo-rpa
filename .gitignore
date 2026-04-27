@@ -1,5 +1,5 @@
 # Agentic Assistant
-.agents/
+#.agents/
 
 # Python
 __pycache__/
@@ -11,10 +11,11 @@ venv/
 .env
 
 # Database
-data/*.db
-data/*.db-journal
-data/*.db-shm
-data/*.db-wal
+#data/*.db
+#data/*.db-journal
+#data/*.db-shm
+#data/*.db-wal
+#data/tabla_fases.xlsx
 
 # Frontend / Web
 node_modules/

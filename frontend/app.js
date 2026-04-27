@@ -231,7 +231,7 @@ async function populateProjectTypesSelect() {
 
 async function populateCommercialSelect() {
     try {
-        const response = await fetch('/api/v1/users', { // Usar endpoint de users general y filtrar aquí
+        const response = await fetch('/api/v1/users/commercials', { 
             headers: { 'Authorization': 'Bearer ' + authToken }
         });
         if (!response.ok) throw new Error('Error al obtener comerciales');
@@ -241,7 +241,8 @@ async function populateCommercialSelect() {
         
         if (select) {
             select.innerHTML = '<option value="">Seleccione un comercial...</option>';
-            users.filter(u => u.role_name === 'Pre-Sales' && u.is_active).forEach(u => {
+            // Filtrado robusto como solicita la Fase 25: exacto 'Pre-sales' o que contenga 'sales' (case-insensitive)
+            users.filter(u => (u.role_name === 'Pre-sales' || u.role_name.toLowerCase().includes('sales')) && u.is_active).forEach(u => {
                 const option = document.createElement('option');
                 option.value = u.id;
                 option.textContent = `${u.name} (${u.email})`;
@@ -575,20 +576,22 @@ async function fetchBacklog() {
 
         if (projects.length === 0) {
             tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No hay proyectos eliminados.</td></tr>';
-            return;
+        } else {
+            projects.forEach(project => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="text-decoration-line-through">${project.process_name}</td>
+                    <td>${project.developer_name}</td>
+                    <td>${project.health_status}</td>
+                    <td>${project.start_date}</td>
+                    <td>${project.estimated_end_date}</td>
+                `;
+                tbody.appendChild(tr);
+            });
         }
 
-        projects.forEach(project => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td class="text-decoration-line-through">${project.process_name}</td>
-                <td>${project.developer_name}</td>
-                <td>${project.health_status}</td>
-                <td>${project.start_date}</td>
-                <td>${project.estimated_end_date}</td>
-            `;
-            tbody.appendChild(tr);
-        });
+        // Mostrar el modal una vez cargado el contenido
+        new bootstrap.Modal(document.getElementById('backlogModal')).show();
     } catch (error) {
         console.error(error);
     }
