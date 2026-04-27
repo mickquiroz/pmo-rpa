@@ -72,7 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const createProjectTypeForm = document.getElementById('create-project-type-form');
     if (createProjectTypeForm) createProjectTypeForm.addEventListener('submit', createProjectType);
-    
+
     const createCommentForm = document.getElementById('create-comment-form');
     if (createCommentForm) createCommentForm.addEventListener('submit', createPhaseComment);
 });
@@ -139,21 +139,21 @@ function handleLogout() {
 }
 
 function applyRoleUI() {
-    const btnCreate          = document.getElementById('btn-create-project');
-    const btnExport          = document.getElementById('btn-export');
-    const btnAdminUsers      = document.getElementById('btn-admin-users');
-    const btnAdminRoles      = document.getElementById('btn-admin-roles');
+    const btnCreate = document.getElementById('btn-create-project');
+    const btnExport = document.getElementById('btn-export');
+    const btnAdminUsers = document.getElementById('btn-admin-users');
+    const btnAdminRoles = document.getElementById('btn-admin-roles');
     const btnAdminProjectTypes = document.getElementById('btn-admin-project-types');
-    const btnBacklog         = document.getElementById('btn-backlog');
-    const btnLogout          = document.getElementById('btn-logout');
+    const btnBacklog = document.getElementById('btn-backlog');
+    const btnLogout = document.getElementById('btn-logout');
 
     if (btnLogout) btnLogout.style.display = 'inline-block';
 
     // ── Panel de Super-Admin (Usuarios, Roles, Tipos): sólo usuarios con rol 'Admin'.
     // Respaldo explícito por rol para el panel administrativo superior.
     const isAdmin = (currentUserRole === 'Admin');
-    if (btnAdminUsers)       btnAdminUsers.style.display       = isAdmin ? 'inline-block' : 'none';
-    if (btnAdminRoles)       btnAdminRoles.style.display       = isAdmin ? 'inline-block' : 'none';
+    if (btnAdminUsers) btnAdminUsers.style.display = isAdmin ? 'inline-block' : 'none';
+    if (btnAdminRoles) btnAdminRoles.style.display = isAdmin ? 'inline-block' : 'none';
     if (btnAdminProjectTypes) btnAdminProjectTypes.style.display = isAdmin ? 'inline-block' : 'none';
 
     // ── Acciones Operativas: COMPLETAMENTE dictadas por el array de permisos del JWT ──
@@ -187,10 +187,10 @@ async function populateDevelopersSelect() {
             headers: { 'Authorization': 'Bearer ' + authToken }
         });
         if (!response.ok) throw new Error('Error al obtener los desarrolladores');
-        
+
         const developers = await response.json();
         const select = document.getElementById('assigned-developer');
-        
+
         if (select) {
             select.innerHTML = '';
             developers.forEach(dev => {
@@ -211,10 +211,10 @@ async function populateProjectTypesSelect() {
             headers: { 'Authorization': 'Bearer ' + authToken }
         });
         if (!response.ok) throw new Error('Error al obtener los tipos de proyecto');
-        
+
         const types = await response.json();
         const select = document.getElementById('project-type');
-        
+
         if (select) {
             select.innerHTML = '<option value="">Seleccione...</option>';
             types.forEach(pt => {
@@ -231,14 +231,14 @@ async function populateProjectTypesSelect() {
 
 async function populateCommercialSelect() {
     try {
-        const response = await fetch('/api/v1/users/commercials', { 
+        const response = await fetch('/api/v1/users/commercials', {
             headers: { 'Authorization': 'Bearer ' + authToken }
         });
         if (!response.ok) throw new Error('Error al obtener comerciales');
-        
+
         const users = await response.json();
         const select = document.getElementById('commercial-id');
-        
+
         if (select) {
             select.innerHTML = '<option value="">Seleccione un comercial...</option>';
             // Filtrado robusto como solicita la Fase 25: exacto 'Pre-sales' o que contenga 'sales' (case-insensitive)
@@ -312,12 +312,12 @@ function renderProjects(projects) {
                 </div>
             </td>
             <td>
-                ${currentUserPermissions.includes('read:projects') 
-                    ? `<button class="btn btn-sm btn-outline-primary me-1" onclick="showProjectGantt(${project.id}, '${project.process_name}')">Ver Gantt</button>` 
-                    : ''}
-                ${currentUserPermissions.includes('edit:phases') || currentUserPermissions.includes('write:projects') 
-                    ? `<button class="btn btn-sm btn-outline-secondary" onclick="openManagePhases(${project.id})">Editar Fases</button>` 
-                    : ''}
+                ${currentUserPermissions.includes('read:projects')
+                ? `<button class="btn btn-sm btn-outline-primary me-1" onclick="showProjectGantt(${project.id}, '${project.process_name}')">Ver Gantt</button>`
+                : ''}
+                ${currentUserPermissions.includes('edit:phases') || currentUserPermissions.includes('write:projects')
+                ? `<button class="btn btn-sm btn-outline-secondary" onclick="openManagePhases(${project.id})">Editar Fases</button>`
+                : ''}
                 ${deleteBtn}
             </td>
         `;
@@ -399,9 +399,9 @@ async function openManagePhases(projectId) {
             const tr = document.createElement('tr');
 
             // Las fechas y detalles estructurales solo editables si puede escribir proyectos
-            const dateDisabled    = canWriteProjects ? '' : 'disabled';
+            const dateDisabled = canWriteProjects ? '' : 'disabled';
             // El estado sólo editable si tiene permiso 'edit:phases'
-            const statusDisabled  = canEditPhases    ? '' : 'disabled';
+            const statusDisabled = canEditPhases ? '' : 'disabled';
             const detailsDisabled = canWriteProjects ? '' : 'disabled';
 
             tr.innerHTML = `
@@ -436,7 +436,7 @@ async function updatePhase(phaseId, btnElement) {
     const newStart = row.querySelector('.date-start').value;
     const newEnd = row.querySelector('.date-end').value;
     const newStatus = row.querySelector('.status-select').value;
-    
+
     const phaseNameInput = row.querySelector('.phase-name');
     const phaseWeightInput = row.querySelector('.phase-weight');
     const newName = phaseNameInput ? phaseNameInput.value : null;
@@ -481,7 +481,7 @@ async function deletePhase(phaseId) {
         });
         if (response.status === 401) { handleLogout(); return; }
         if (!response.ok) throw new Error('Error al eliminar fase');
-        
+
         openManagePhases(currentManageProjectId);
         fetchProjects();
     } catch (error) {
@@ -535,13 +535,13 @@ async function handleCreateProject(e) {
         const response = await fetch('/api/v1/projects', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
-            body: JSON.stringify({ 
-                process_name: processName, 
-                project_type_id: projectTypeId, 
-                assigned_developer_id: assignedDev, 
-                commercial_id: commercialId, 
-                start_date: startDate, 
-                estimated_end_date: endDate 
+            body: JSON.stringify({
+                process_name: processName,
+                project_type_id: projectTypeId,
+                assigned_developer_id: assignedDev,
+                commercial_id: commercialId,
+                start_date: startDate,
+                estimated_end_date: endDate
             })
         });
         if (response.status === 401) { handleLogout(); return; }
@@ -590,8 +590,10 @@ async function fetchBacklog() {
             });
         }
 
-        // Mostrar el modal una vez cargado el contenido
-        new bootstrap.Modal(document.getElementById('backlogModal')).show();
+        // Mostrar el modal evitando instanciaciones múltiples
+        const backlogEl = document.getElementById('backlogModal');
+        const backlogModal = bootstrap.Modal.getInstance(backlogEl) || new bootstrap.Modal(backlogEl);
+        backlogModal.show();
     } catch (error) {
         console.error(error);
     }
@@ -806,7 +808,7 @@ async function fetchRoles() {
 
         roles.forEach(role => {
             const tr = document.createElement('tr');
-            
+
             // Mapear IDs de permisos a nombres legibles usando la caché global
             const permBadges = role.permission_ids && role.permission_ids.length
                 ? role.permission_ids.map(pid => {
@@ -814,7 +816,7 @@ async function fetchRoles() {
                     return `<span class="badge bg-info text-dark me-1" title="ID: ${pid}">${perm ? perm.action : pid}</span>`;
                 }).join('')
                 : '<small class="text-muted">Sin permisos</small>';
-            
+
             // Botones de acción (Editar / Eliminar)
             const actions = `
                 <div class="d-flex gap-1">
@@ -868,7 +870,7 @@ async function createRole(e) {
 
         resetRoleForm();
         fetchRoles();
-    } catch (error) { 
+    } catch (error) {
         errorContainer.innerHTML = `<div class="alert alert-danger py-2 mb-3">${error.message}</div>`;
     }
 }
@@ -876,17 +878,17 @@ async function createRole(e) {
 function editRole(role) {
     const formTitle = document.querySelector('#adminRolesModal .col-md-4 h6');
     if (formTitle) formTitle.innerText = 'Editar Rol';
-    
+
     // Scroll al formulario (opcional)
     document.getElementById('create-role-form').scrollIntoView({ behavior: 'smooth' });
 
     // Llenar campos
     document.getElementById('new-role-name').value = role.name;
     document.getElementById('new-role-desc').value = role.description || '';
-    
+
     // Limpiar checkboxes
     document.querySelectorAll('#permissions-checkboxes input[type="checkbox"]').forEach(cb => cb.checked = false);
-    
+
     // Marcar permisos del rol
     if (role.permission_ids) {
         role.permission_ids.forEach(pid => {
@@ -907,7 +909,7 @@ function resetRoleForm() {
     editingRoleId = null;
     const form = document.getElementById('create-role-form');
     if (form) form.reset();
-    
+
     const formTitle = document.querySelector('#adminRolesModal .col-md-4 h6');
     if (formTitle) formTitle.innerText = 'Crear Rol';
 
@@ -920,7 +922,7 @@ function resetRoleForm() {
 
     // Limpiar checkboxes
     document.querySelectorAll('#permissions-checkboxes input[type="checkbox"]').forEach(cb => cb.checked = false);
-    
+
     // Ocultar botón cancelar
     const cancelBtn = document.getElementById('btn-cancel-role-edit');
     if (cancelBtn) cancelBtn.style.display = 'none';
@@ -931,7 +933,7 @@ function resetRoleForm() {
 
 async function deleteRole(id) {
     if (!confirm('¿Seguro que deseas eliminar este rol? Esta acción no se puede deshacer.')) return;
-    
+
     const errorContainer = document.getElementById('roles-error-container');
     errorContainer.innerHTML = '';
 
@@ -942,7 +944,7 @@ async function deleteRole(id) {
         });
 
         if (response.status === 401) { handleLogout(); return; }
-        
+
         if (!response.ok) {
             const errData = await response.json();
             throw new Error(errData.detail || 'Error al eliminar rol');
@@ -1041,7 +1043,7 @@ async function createProjectType(e) {
 
         document.getElementById('create-project-type-form').reset();
         fetchProjectTypes();
-    } catch (error) { 
+    } catch (error) {
         errorContainer.innerHTML = `<div class="alert alert-danger py-2 mb-3">${error.message}</div>`;
     }
 }

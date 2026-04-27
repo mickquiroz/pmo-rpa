@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -11,378 +12,47 @@
     <!-- Custom CSS -->
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body class="bg-light">
 
-<!-- Navbar -->
-<nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
-    <div class="container-fluid">
-        <a class="navbar-brand fw-bold" href="#">PMO RPA Dashboard</a>
-        <div class="d-flex align-items-center">
-            <button id="btn-admin-roles" class="btn btn-outline-light btn-sm fw-semibold me-2" data-bs-toggle="modal" data-bs-target="#adminRolesModal" style="display: none;">Administrar Roles</button>
-            <button id="btn-admin-project-types" class="btn btn-outline-light btn-sm fw-semibold me-2" data-bs-toggle="modal" data-bs-target="#adminProjectTypesModal" style="display: none;">Tipos de Proyecto</button>
-            <button id="btn-admin-users" class="btn btn-outline-light btn-sm fw-semibold me-2" data-bs-toggle="modal" data-bs-target="#adminUsersModal" style="display: none;">Administrar Usuarios</button>
-            <button id="btn-backlog" class="btn btn-outline-warning btn-sm fw-semibold me-2" style="display: none;">Ver Backlog</button>
-            <button id="btn-logout" class="btn btn-outline-light btn-sm fw-semibold" style="display: none;">Cerrar Sesión</button>
-        </div>
-    </div>
-</nav>
-
-<!-- Main Container -->
-<div class="container mt-4">
-    <!-- Error Alert Container -->
-    <div id="error-container"></div>
-
-    <div class="card shadow-sm border-0">
-        <div class="card-header bg-white border-bottom-0 pt-4 pb-0 d-flex justify-content-between align-items-center">
-            <h5 class="card-title fw-bold text-dark mb-0">Resumen de Proyectos</h5>
-            <div>
-                <button id="btn-create-project" class="btn btn-primary me-2" data-bs-toggle="modal" data-bs-target="#createProjectModal" style="display: none;">Crear Proyecto</button>
-                <button id="btn-export" class="btn btn-success" style="display: none;">Descargar Reporte</button>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="#">PMO RPA Dashboard</a>
+            <div class="d-flex align-items-center">
+                <button id="btn-admin-roles" class="btn btn-outline-light btn-sm fw-semibold me-2"
+                    data-bs-toggle="modal" data-bs-target="#adminRolesModal" style="display: none;">Administrar
+                    Roles</button>
+                <button id="btn-admin-project-types" class="btn btn-outline-light btn-sm fw-semibold me-2"
+                    data-bs-toggle="modal" data-bs-target="#adminProjectTypesModal" style="display: none;">Tipos de
+                    Proyecto</button>
+                <button id="btn-admin-users" class="btn btn-outline-light btn-sm fw-semibold me-2"
+                    data-bs-toggle="modal" data-bs-target="#adminUsersModal" style="display: none;">Administrar
+                    Usuarios</button>
+                <button id="btn-backlog" class="btn btn-outline-warning btn-sm fw-semibold me-2"
+                    style="display: none;">Ver Backlog</button>
+                <button id="btn-logout" class="btn btn-outline-light btn-sm fw-semibold" style="display: none;">Cerrar
+                    Sesión</button>
             </div>
         </div>
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-hover align-middle">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Proceso</th>
-                            <th>Desarrollador</th>
-                            <th>Estado de Salud</th>
-                            <th class="w-25">Avance General</th>
-                            <th>Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody id="projects-table-body">
-                        <!-- Projects injected dynamically -->
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-</div>
+    </nav>
 
-<!-- Login Modal -->
-<div class="modal fade" id="loginModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="loginModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 shadow">
-            <div class="modal-header bg-primary text-white">
-                <h5 class="modal-title fw-bold" id="loginModalLabel">Iniciar Sesión</h5>
-            </div>
-            <div class="modal-body p-4">
-                <div id="login-error-container"></div>
-                <form id="login-form">
-                    <div class="mb-3">
-                        <label for="login-email" class="form-label">Correo Electrónico</label>
-                        <input type="email" class="form-control" id="login-email" required placeholder="admin@example.com">
-                    </div>
-                    <div class="mb-4">
-                        <label for="login-password" class="form-label">Contraseña</label>
-                        <input type="password" class="form-control" id="login-password" required placeholder="********">
-                    </div>
-                    <div class="d-grid shadow-sm">
-                        <button type="submit" class="btn btn-primary fw-bold" id="btn-login-submit">Ingresar</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
+    <!-- Main Container -->
+    <div class="container mt-4">
+        <!-- Error Alert Container -->
+        <div id="error-container"></div>
 
-<!-- Admin Users Modal -->
-<div class="modal fade" id="adminUsersModal" tabindex="-1" aria-labelledby="adminUsersModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-scrollable">
-        <div class="modal-content">
-            <div class="modal-header bg-secondary text-white">
-                <h5 class="modal-title fw-bold" id="adminUsersModalLabel">Administrar Usuarios</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body p-4">
-                <div class="row">
-                    <!-- Create User Form -->
-                    <div class="col-md-4 border-end">
-                        <h6 class="fw-bold mb-3">Crear API User</h6>
-                        <form id="create-user-form">
-                            <div class="mb-3">
-                                <label class="form-label">Nombre Completo</label>
-                                <input type="text" class="form-control form-control-sm" id="new-user-name" required>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Email</label>
-                                <input type="email" class="form-control form-control-sm" id="new-user-email" required>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Contraseña</label>
-                                <input type="password" class="form-control form-control-sm" id="new-user-password" required minlength="4">
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Rol</label>
-                                <select class="form-select form-select-sm" id="new-user-role" required>
-                                    <option value="">Cargando roles...</option>
-                                </select>
-                            </div>
-                            <button type="submit" class="btn btn-sm btn-primary w-100">Crear Usuario</button>
-                        </form>
-                    </div>
-                    <!-- Users Table -->
-                    <div class="col-md-8">
-                        <h6 class="fw-bold mb-3">Usuarios Activos</h6>
-                        <div class="table-responsive">
-                            <table class="table table-sm table-hover align-middle">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>ID</th>
-                                        <th>Nombre</th>
-                                        <th>Email</th>
-                                        <th>Rol</th>
-                                        <th>Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="users-table-body">
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
+        <div class="card shadow-sm border-0">
+            <div
+                class="card-header bg-white border-bottom-0 pt-4 pb-0 d-flex justify-content-between align-items-center">
+                <h5 class="card-title fw-bold text-dark mb-0">Resumen de Proyectos</h5>
+                <div>
+                    <button id="btn-create-project" class="btn btn-primary me-2" data-bs-toggle="modal"
+                        data-bs-target="#createProjectModal" style="display: none;">Crear Proyecto</button>
+                    <button id="btn-export" class="btn btn-success" style="display: none;">Descargar Reporte</button>
                 </div>
             </div>
-        </div>
-    </div>
-</div>
-
-<!-- Admin Roles Modal -->
-<div class="modal fade" id="adminRolesModal" tabindex="-1" aria-labelledby="adminRolesModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-scrollable">
-        <div class="modal-content">
-            <div class="modal-header bg-secondary text-white">
-                <h5 class="modal-title fw-bold" id="adminRolesModalLabel">Administrar Roles</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body p-4">
-                <div id="roles-error-container"></div>
-                <div class="row">
-                    <!-- Create Role Form -->
-                    <div class="col-md-4 border-end">
-                        <h6 class="fw-bold mb-3">Crear Rol</h6>
-                        <form id="create-role-form">
-                            <div class="mb-3">
-                                <label class="form-label">Nombre del Rol</label>
-                                <input type="text" class="form-control form-control-sm" id="new-role-name" required>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Descripción</label>
-                                <input type="text" class="form-control form-control-sm" id="new-role-desc">
-                            </div>
-                            <div id="permissions-container" class="mb-3">
-                                <label class="form-label fw-semibold">Permisos</label>
-                                <div id="permissions-checkboxes" class="p-2 border rounded bg-light">
-                                    <small class="text-muted">Cargando permisos...</small>
-                                </div>
-                            </div>
-                            <div class="d-flex gap-2">
-                                <button type="submit" class="btn btn-sm btn-primary w-100">Crear Rol</button>
-                                <button type="button" id="btn-cancel-role-edit" class="btn btn-sm btn-outline-secondary w-100" style="display:none;" onclick="resetRoleForm()">Cancelar</button>
-                            </div>
-                        </form>
-                    </div>
-                    <!-- Roles Table -->
-                    <div class="col-md-8">
-                        <h6 class="fw-bold mb-3">Roles Existentes</h6>
-                        <div class="table-responsive">
-                            <table class="table table-sm table-hover align-middle">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>ID</th>
-                                        <th>Nombre</th>
-                                        <th>Descripción</th>
-                                        <th>Permisos</th>
-                                        <th>Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="roles-table-body">
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Admin Project Types Modal -->
-<div class="modal fade" id="adminProjectTypesModal" tabindex="-1" aria-labelledby="adminProjectTypesModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-scrollable">
-        <div class="modal-content">
-            <div class="modal-header bg-secondary text-white">
-                <h5 class="modal-title fw-bold" id="adminProjectTypesModalLabel">Administrar Tipos de Proyecto</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body p-4">
-                <div id="project-types-error-container"></div>
-                <div class="row">
-                    <!-- Create Project Type Form -->
-                    <div class="col-md-4 border-end">
-                        <h6 class="fw-bold mb-3">Crear Tipo de Proyecto</h6>
-                        <form id="create-project-type-form">
-                            <div class="mb-3">
-                                <label class="form-label">Nombre del Tipo</label>
-                                <input type="text" class="form-control form-control-sm" id="new-pt-name" required>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Descripción</label>
-                                <input type="text" class="form-control form-control-sm" id="new-pt-desc">
-                            </div>
-                            <button type="submit" class="btn btn-sm btn-primary w-100">Crear Tipo</button>
-                        </form>
-                    </div>
-                    <!-- Project Types Table -->
-                    <div class="col-md-8">
-                        <h6 class="fw-bold mb-3">Tipos Existentes</h6>
-                        <div class="table-responsive">
-                            <table class="table table-sm table-hover align-middle">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>ID</th>
-                                        <th>Nombre</th>
-                                        <th>Descripción</th>
-                                        <th>Activo</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="project-types-table-body">
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Gantt Modal -->
-<div class="modal fade" id="ganttModal" tabindex="-1" aria-labelledby="ganttModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title fw-bold" id="ganttModalLabel">Project Gantt Chart</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body overflow-auto">
-                <div id="gantt-target"></div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Create Project Modal -->
-<div class="modal fade" id="createProjectModal" tabindex="-1" aria-labelledby="createProjectModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title fw-bold" id="createProjectModalLabel">Crear Nuevo Proyecto</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <form id="create-project-form">
-                    <div class="mb-3">
-                        <label for="process-name" class="form-label">Nombre del Proceso</label>
-                        <input type="text" class="form-control" id="process-name" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="project-type" class="form-label">Tipo de Proyecto</label>
-                        <select class="form-select" id="project-type" required>
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label for="assigned-developer" class="form-label">Desarrollador Asignado</label>
-                        <select class="form-select" id="assigned-developer" required>
-                            
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label for="commercial-id" class="form-label">Comercial Asignado (Opcional)</label>
-                        <select class="form-select" id="commercial-id">
-                            <option value="">Seleccione un comercial...</option>
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label for="start-date" class="form-label">Fecha de Inicio</label>
-                        <input type="date" class="form-control" id="start-date" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="estimated-end-date" class="form-label">Fecha Estimada de Fin</label>
-                        <input type="date" class="form-control" id="estimated-end-date" required>
-                    </div>
-                    <div class="text-end mt-4">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                        <button type="submit" class="btn btn-primary">Guardar Proyecto</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Manage Phases Modal -->
-<div class="modal fade" id="managePhasesModal" tabindex="-1" aria-labelledby="managePhasesModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title fw-bold" id="managePhasesModalLabel">Administrar Fases</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <div id="create-phase-container" class="card p-3 mb-3 bg-light">
-                    <form id="create-phase-form" class="row gx-2 gy-2 align-items-center">
-                        <div class="col-sm-3">
-                            <input type="text" class="form-control form-control-sm" id="new-phase-name" placeholder="Nombre de Fase" required>
-                        </div>
-                        <div class="col-sm-2">
-                            <input type="number" class="form-control form-control-sm" id="new-phase-weight" placeholder="Peso (%)" min="0" max="100" required>
-                        </div>
-                        <div class="col-sm-3">
-                            <input type="date" class="form-control form-control-sm" id="new-phase-start" required>
-                        </div>
-                        <div class="col-sm-2">
-                            <input type="date" class="form-control form-control-sm" id="new-phase-end" required>
-                        </div>
-                        <div class="col-sm-2">
-                            <button type="submit" class="btn btn-sm btn-primary w-100">Añadir Fase</button>
-                        </div>
-                    </form>
-                </div>
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Fase</th>
-                                <th>Peso (%)</th>
-                                <th>Fecha Inicio</th>
-                                <th>Fecha Fin</th>
-                                <th>Estado</th>
-                                <th>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody id="phases-table-body">
-                            <!-- Phases injected dynamically -->
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
-        </div>
-    </div>
-</div>
-
-<!-- Backlog Modal -->
-<div class="modal fade" id="backlogModal" tabindex="-1" aria-labelledby="backlogModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-scrollable">
-        <div class="modal-content">
-            <div class="modal-header bg-warning">
-                <h5 class="modal-title fw-bold" id="backlogModalLabel">Backlog (Proyectos Eliminados)</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
+            <div class="card-body">
                 <div class="table-responsive">
                     <table class="table table-hover align-middle">
                         <thead class="table-light">
@@ -390,55 +60,420 @@
                                 <th>Proceso</th>
                                 <th>Desarrollador</th>
                                 <th>Estado de Salud</th>
-                                <th>Fecha Inicio</th>
-                                <th>Fecha Fin</th>
+                                <th class="w-25">Avance General</th>
+                                <th>Acciones</th>
                             </tr>
                         </thead>
-                        <tbody id="backlog-table-body">
-                            <!-- Backlog projects injected dynamically -->
+                        <tbody id="projects-table-body">
+                            <!-- Projects injected dynamically -->
                         </tbody>
                     </table>
                 </div>
             </div>
         </div>
     </div>
-</div>
 
-<!-- Phase Comments Modal -->
-<div class="modal fade" id="phaseCommentsModal" tabindex="-1" aria-labelledby="phaseCommentsModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header bg-info text-white">
-                <h5 class="modal-title fw-bold" id="phaseCommentsModalLabel">Comentarios de Fase</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <div class="mb-4">
-                    <form id="create-comment-form">
-                        <input type="hidden" id="comment-phase-id">
-                        <div class="form-floating mb-2">
-                            <textarea class="form-control" placeholder="Escribe un comentario aquí" id="new-comment-text" style="height: 100px" required></textarea>
-                            <label for="new-comment-text">Nuevo Comentario</label>
+    <!-- Login Modal -->
+    <div class="modal fade" id="loginModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1"
+        aria-labelledby="loginModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title fw-bold" id="loginModalLabel">Iniciar Sesión</h5>
+                </div>
+                <div class="modal-body p-4">
+                    <div id="login-error-container"></div>
+                    <form id="login-form">
+                        <div class="mb-3">
+                            <label for="login-email" class="form-label">Correo Electrónico</label>
+                            <input type="email" class="form-control" id="login-email" required
+                                placeholder="admin@example.com">
                         </div>
-                        <div class="text-end">
-                            <button type="submit" class="btn btn-sm btn-primary">Añadir Comentario</button>
+                        <div class="mb-4">
+                            <label for="login-password" class="form-label">Contraseña</label>
+                            <input type="password" class="form-control" id="login-password" required
+                                placeholder="********">
+                        </div>
+                        <div class="d-grid shadow-sm">
+                            <button type="submit" class="btn btn-primary fw-bold"
+                                id="btn-login-submit">Ingresar</button>
                         </div>
                     </form>
-                </div>
-                <h6 class="fw-bold mb-3">Historial de Comentarios</h6>
-                <div class="list-group" id="comments-list">
-                    <!-- Comments injected dynamically -->
                 </div>
             </div>
         </div>
     </div>
-</div>
 
-<!-- Bootstrap 5 JS Bundle -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-<!-- Frappe Gantt JS -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/frappe-gantt/0.6.1/frappe-gantt.min.js"></script>
-<!-- Custom JS -->
-<script src="app.js"></script>
+    <!-- Admin Users Modal -->
+    <div class="modal fade" id="adminUsersModal" tabindex="-1" aria-labelledby="adminUsersModalLabel"
+        aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-secondary text-white">
+                    <h5 class="modal-title fw-bold" id="adminUsersModalLabel">Administrar Usuarios</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                        aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="row">
+                        <!-- Create User Form -->
+                        <div class="col-md-4 border-end">
+                            <h6 class="fw-bold mb-3">Crear API User</h6>
+                            <form id="create-user-form">
+                                <div class="mb-3">
+                                    <label class="form-label">Nombre Completo</label>
+                                    <input type="text" class="form-control form-control-sm" id="new-user-name" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Email</label>
+                                    <input type="email" class="form-control form-control-sm" id="new-user-email"
+                                        required>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Contraseña</label>
+                                    <input type="password" class="form-control form-control-sm" id="new-user-password"
+                                        required minlength="4">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Rol</label>
+                                    <select class="form-select form-select-sm" id="new-user-role" required>
+                                        <option value="">Cargando roles...</option>
+                                    </select>
+                                </div>
+                                <button type="submit" class="btn btn-sm btn-primary w-100">Crear Usuario</button>
+                            </form>
+                        </div>
+                        <!-- Users Table -->
+                        <div class="col-md-8">
+                            <h6 class="fw-bold mb-3">Usuarios Activos</h6>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover align-middle">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Nombre</th>
+                                            <th>Email</th>
+                                            <th>Rol</th>
+                                            <th>Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="users-table-body">
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Roles Modal -->
+    <div class="modal fade" id="adminRolesModal" tabindex="-1" aria-labelledby="adminRolesModalLabel"
+        aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-secondary text-white">
+                    <h5 class="modal-title fw-bold" id="adminRolesModalLabel">Administrar Roles</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                        aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div id="roles-error-container"></div>
+                    <div class="row">
+                        <!-- Create Role Form -->
+                        <div class="col-md-4 border-end">
+                            <h6 class="fw-bold mb-3">Crear Rol</h6>
+                            <form id="create-role-form">
+                                <div class="mb-3">
+                                    <label class="form-label">Nombre del Rol</label>
+                                    <input type="text" class="form-control form-control-sm" id="new-role-name" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Descripción</label>
+                                    <input type="text" class="form-control form-control-sm" id="new-role-desc">
+                                </div>
+                                <div id="permissions-container" class="mb-3">
+                                    <label class="form-label fw-semibold">Permisos</label>
+                                    <div id="permissions-checkboxes" class="p-2 border rounded bg-light">
+                                        <small class="text-muted">Cargando permisos...</small>
+                                    </div>
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <button type="submit" class="btn btn-sm btn-primary w-100">Crear Rol</button>
+                                    <button type="button" id="btn-cancel-role-edit"
+                                        class="btn btn-sm btn-outline-secondary w-100" style="display:none;"
+                                        onclick="resetRoleForm()">Cancelar</button>
+                                </div>
+                            </form>
+                        </div>
+                        <!-- Roles Table -->
+                        <div class="col-md-8">
+                            <h6 class="fw-bold mb-3">Roles Existentes</h6>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover align-middle">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Nombre</th>
+                                            <th>Descripción</th>
+                                            <th>Permisos</th>
+                                            <th>Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="roles-table-body">
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Project Types Modal -->
+    <div class="modal fade" id="adminProjectTypesModal" tabindex="-1" aria-labelledby="adminProjectTypesModalLabel"
+        aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-secondary text-white">
+                    <h5 class="modal-title fw-bold" id="adminProjectTypesModalLabel">Administrar Tipos de Proyecto</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                        aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div id="project-types-error-container"></div>
+                    <div class="row">
+                        <!-- Create Project Type Form -->
+                        <div class="col-md-4 border-end">
+                            <h6 class="fw-bold mb-3">Crear Tipo de Proyecto</h6>
+                            <form id="create-project-type-form">
+                                <div class="mb-3">
+                                    <label class="form-label">Nombre del Tipo</label>
+                                    <input type="text" class="form-control form-control-sm" id="new-pt-name" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Descripción</label>
+                                    <input type="text" class="form-control form-control-sm" id="new-pt-desc">
+                                </div>
+                                <button type="submit" class="btn btn-sm btn-primary w-100">Crear Tipo</button>
+                            </form>
+                        </div>
+                        <!-- Project Types Table -->
+                        <div class="col-md-8">
+                            <h6 class="fw-bold mb-3">Tipos Existentes</h6>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover align-middle">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Nombre</th>
+                                            <th>Descripción</th>
+                                            <th>Activo</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="project-types-table-body">
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gantt Modal -->
+    <div class="modal fade" id="ganttModal" tabindex="-1" aria-labelledby="ganttModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold" id="ganttModalLabel">Project Gantt Chart</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body overflow-auto">
+                    <div id="gantt-target"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Project Modal -->
+    <div class="modal fade" id="createProjectModal" tabindex="-1" aria-labelledby="createProjectModalLabel"
+        aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold" id="createProjectModalLabel">Crear Nuevo Proyecto</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="create-project-form">
+                        <div class="mb-3">
+                            <label for="process-name" class="form-label">Nombre del Proceso</label>
+                            <input type="text" class="form-control" id="process-name" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="project-type" class="form-label">Tipo de Proyecto</label>
+                            <select class="form-select" id="project-type" required>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="assigned-developer" class="form-label">Desarrollador Asignado</label>
+                            <select class="form-select" id="assigned-developer" required>
+
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="commercial-id" class="form-label">Comercial Asignado (Opcional)</label>
+                            <select class="form-select" id="commercial-id">
+                                <option value="">Seleccione un comercial...</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="start-date" class="form-label">Fecha de Inicio</label>
+                            <input type="date" class="form-control" id="start-date" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="estimated-end-date" class="form-label">Fecha Estimada de Fin</label>
+                            <input type="date" class="form-control" id="estimated-end-date" required>
+                        </div>
+                        <div class="text-end mt-4">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="submit" class="btn btn-primary">Guardar Proyecto</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Manage Phases Modal -->
+    <div class="modal fade" id="managePhasesModal" tabindex="-1" aria-labelledby="managePhasesModalLabel"
+        aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold" id="managePhasesModalLabel">Administrar Fases</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="create-phase-container" class="card p-3 mb-3 bg-light">
+                        <form id="create-phase-form" class="row gx-2 gy-2 align-items-center">
+                            <div class="col-sm-3">
+                                <input type="text" class="form-control form-control-sm" id="new-phase-name"
+                                    placeholder="Nombre de Fase" required>
+                            </div>
+                            <div class="col-sm-2">
+                                <input type="number" class="form-control form-control-sm" id="new-phase-weight"
+                                    placeholder="Peso (%)" min="0" max="100" required>
+                            </div>
+                            <div class="col-sm-3">
+                                <input type="date" class="form-control form-control-sm" id="new-phase-start" required>
+                            </div>
+                            <div class="col-sm-2">
+                                <input type="date" class="form-control form-control-sm" id="new-phase-end" required>
+                            </div>
+                            <div class="col-sm-2">
+                                <button type="submit" class="btn btn-sm btn-primary w-100">Añadir Fase</button>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Fase</th>
+                                    <th>Peso (%)</th>
+                                    <th>Fecha Inicio</th>
+                                    <th>Fecha Fin</th>
+                                    <th>Estado</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="phases-table-body">
+                                <!-- Phases injected dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Backlog Modal -->
+    <div class="modal fade" id="backlogModal" tabindex="-1" aria-labelledby="backlogModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-warning">
+                    <h5 class="modal-title fw-bold" id="backlogModalLabel">Backlog (Proyectos Eliminados)</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Proceso</th>
+                                    <th>Desarrollador</th>
+                                    <th>Estado de Salud</th>
+                                    <th>Fecha Inicio</th>
+                                    <th>Fecha Fin</th>
+                                </tr>
+                            </thead>
+                            <tbody id="backlog-table-body">
+                                <!-- Backlog projects injected dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Phase Comments Modal -->
+    <div class="modal fade" id="phaseCommentsModal" tabindex="-1" aria-labelledby="phaseCommentsModalLabel"
+        aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title fw-bold" id="phaseCommentsModalLabel">Comentarios de Fase</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                        aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-4">
+                        <form id="create-comment-form">
+                            <input type="hidden" id="comment-phase-id">
+                            <div class="form-floating mb-2">
+                                <textarea class="form-control" placeholder="Escribe un comentario aquí"
+                                    id="new-comment-text" style="height: 100px" required></textarea>
+                                <label for="new-comment-text">Nuevo Comentario</label>
+                            </div>
+                            <div class="text-end">
+                                <button type="submit" class="btn btn-sm btn-primary">Añadir Comentario</button>
+                            </div>
+                        </form>
+                    </div>
+                    <h6 class="fw-bold mb-3">Historial de Comentarios</h6>
+                    <div class="list-group" id="comments-list">
+                        <!-- Comments injected dynamically -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap 5 JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Frappe Gantt JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/frappe-gantt/0.6.1/frappe-gantt.min.js"></script>
+    <!-- Custom JS -->
+    <script src="app.js"></script>
 </body>
+
 </html>
