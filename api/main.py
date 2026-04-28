@@ -94,8 +94,22 @@ def seed_permissions() -> None:
         conn.commit()
 
 
+def init_db_schema() -> None:
+    """
+    Asegura que la base de datos tenga la estructura necesaria para la Fase 29.
+    Añade la columna display_order a la tabla Phases si no existe.
+    """
+    with get_db() as conn:
+        try:
+            conn.execute("ALTER TABLE Phases ADD COLUMN display_order INTEGER DEFAULT 0;")
+            conn.commit()
+        except sqlite3.OperationalError:
+            # La columna probablemente ya existe
+            pass
+
 @app.on_event("startup")
 def on_startup() -> None:
+    init_db_schema()
     seed_permissions()
 
 # ---------------------------------------------------------------------------
@@ -170,6 +184,7 @@ class PhaseResponse(BaseModel):
     start_date: str
     estimated_end_date: str
     completion_date: Optional[str]
+    display_order: int = 0
 
     class Config:
         from_attributes = True
@@ -205,6 +220,7 @@ class PhaseDetailsUpdate(BaseModel):
     """Payload para editar los datos estructurales de la fase."""
     phase_name: str = Field(..., min_length=2)
     weight_percentage: int = Field(..., ge=0, le=100)
+    display_order: Optional[int] = 0
 
 
 class ProjectCreate(BaseModel):
@@ -302,6 +318,20 @@ class PhaseCommentCreate(BaseModel):
 class PhaseCommentResponse(BaseModel):
     id: int
     phase_id: int
+    user_id: int
+    user_name: str
+    comment_text: str
+    created_at: str
+
+    class Config:
+        from_attributes = True
+
+
+class ProjectCommentResponse(BaseModel):
+    """Representación de un comentario con el nombre de la fase a la que pertenece."""
+    id: int
+    phase_id: int
+    phase_name: str
     user_id: int
     user_name: str
     comment_text: str
@@ -496,7 +526,7 @@ def list_phases(project_id: int) -> List[dict]:
             )
 
         rows = conn.execute(
-            "SELECT * FROM Phases WHERE project_id = ? ORDER BY id",
+            "SELECT * FROM Phases WHERE project_id = ? ORDER BY display_order ASC, start_date ASC",
             (project_id,),
         ).fetchall()
 
@@ -697,13 +727,13 @@ def create_project(payload: ProjectCreate, current_user: dict = Depends(get_curr
         if templates:
             # Si hay plantillas, insertar fases en cascada
             phases_data = [
-                (project_id, t["phase_name"], t["weight_percentage"], payload.start_date, payload.estimated_end_date)
-                for t in templates
+                (project_id, t["phase_name"], t["weight_percentage"], payload.start_date, payload.estimated_end_date, idx)
+                for idx, t in enumerate(templates)
             ]
             conn.executemany(
                 """
-                INSERT INTO Phases (project_id, phase_name, weight_percentage, status, start_date, estimated_end_date)
-                VALUES (?, ?, ?, 'Pending', ?, ?)
+                INSERT INTO Phases (project_id, phase_name, weight_percentage, status, start_date, estimated_end_date, display_order)
+                VALUES (?, ?, ?, 'Pending', ?, ?, ?)
                 """,
                 phases_data
             )
@@ -779,12 +809,19 @@ def create_phase(payload: PhaseCreate, current_user: dict = Depends(get_current_
         if not project:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proyecto no encontrado.")
             
+        # Calcular el siguiente display_order
+        order_row = conn.execute(
+            "SELECT COALESCE(MAX(display_order), -1) + 1 FROM Phases WHERE project_id = ?",
+            (payload.project_id,)
+        ).fetchone()
+        next_order = order_row[0]
+
         cursor = conn.execute(
             """
-            INSERT INTO Phases (project_id, phase_name, weight_percentage, status, start_date, estimated_end_date)
-            VALUES (?, ?, ?, 'Pending', ?, ?)
+            INSERT INTO Phases (project_id, phase_name, weight_percentage, status, start_date, estimated_end_date, display_order)
+            VALUES (?, ?, ?, 'Pending', ?, ?, ?)
             """,
-            (payload.project_id, payload.phase_name, payload.weight_percentage, payload.start_date, payload.estimated_end_date)
+            (payload.project_id, payload.phase_name, payload.weight_percentage, payload.start_date, payload.estimated_end_date, next_order)
         )
         conn.commit()
         new_id = cursor.lastrowid
@@ -817,8 +854,8 @@ def update_phase_details(phase_id: int, payload: PhaseDetailsUpdate, current_use
             raise HTTPException(status_code=404, detail="Fase no encontrada.")
 
         conn.execute(
-            "UPDATE Phases SET phase_name = ?, weight_percentage = ? WHERE id = ?",
-            (payload.phase_name, payload.weight_percentage, phase_id)
+            "UPDATE Phases SET phase_name = ?, weight_percentage = ?, display_order = ? WHERE id = ?",
+            (payload.phase_name, payload.weight_percentage, payload.display_order, phase_id)
         )
         conn.commit()
 
@@ -1296,6 +1333,40 @@ def create_phase_comment(phase_id: int, payload: PhaseCommentCreate, current_use
         ).fetchone()
     
     return dict(new_comment)
+
+
+@app.get(
+    f"{API_PREFIX}/projects/{{project_id}}/comments",
+    response_model=List[ProjectCommentResponse],
+    tags=["Projects"],
+    summary="Lista todos los comentarios de un proyecto (todas sus fases)",
+    status_code=status.HTTP_200_OK,
+)
+def list_project_comments(project_id: int, _: dict = Depends(get_current_user)) -> List[dict]:
+    """
+    Obtiene todos los comentarios de todas las fases asociadas a un proyecto específico.
+    Incluye el nombre de la fase para contexto en la vista consolidada.
+    """
+    with get_db() as conn:
+        rows = conn.execute(
+            """
+            SELECT 
+                c.id, 
+                c.phase_id, 
+                p.phase_name, 
+                c.user_id, 
+                u.name as user_name, 
+                c.comment_text, 
+                c.created_at
+            FROM Phase_Comments c
+            JOIN Users u ON c.user_id = u.id
+            JOIN Phases p ON c.phase_id = p.id
+            WHERE p.project_id = ?
+            ORDER BY c.created_at DESC
+            """,
+            (project_id,)
+        ).fetchall()
+    return [dict(row) for row in rows]
 
 
 # ---------------------------------------------------------------------------

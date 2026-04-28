@@ -287,13 +287,71 @@
     <!-- Gantt Modal -->
     <div class="modal fade" id="ganttModal" tabindex="-1" aria-labelledby="ganttModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-xl">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title fw-bold" id="ganttModalLabel">Project Gantt Chart</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header bg-white border-bottom pb-2 flex-column align-items-start gap-2">
+                    <div class="d-flex w-100 justify-content-between align-items-center">
+                        <h5 class="modal-title fw-bold text-dark" id="ganttModalLabel">Project Gantt Chart</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="d-flex align-items-center justify-content-between w-100 flex-wrap gap-2">
+                        <!-- Selector de Escala -->
+                        <div class="btn-group btn-group-sm" role="group" aria-label="Escala del Gantt">
+                            <button type="button" id="gantt-view-day"
+                                class="btn btn-outline-primary gantt-view-btn"
+                                onclick="setGanttViewMode('Day')">Día</button>
+                            <button type="button" id="gantt-view-week"
+                                class="btn btn-outline-primary gantt-view-btn active"
+                                onclick="setGanttViewMode('Week')">Semana</button>
+                            <button type="button" id="gantt-view-month"
+                                class="btn btn-outline-primary gantt-view-btn"
+                                onclick="setGanttViewMode('Month')">Mes</button>
+                        </div>
+                        <!-- Leyenda de Estado -->
+                        <div class="d-flex align-items-center gap-3">
+                            <span class="gantt-legend-dot gantt-legend-completed"></span>
+                            <small class="text-muted me-2">Completado</small>
+                            <span class="gantt-legend-dot gantt-legend-progress"></span>
+                            <small class="text-muted me-2">En Progreso</small>
+                            <span class="gantt-legend-dot gantt-legend-pending"></span>
+                            <small class="text-muted">Pendiente</small>
+                        </div>
+                    </div>
                 </div>
-                <div class="modal-body overflow-auto">
-                    <div id="gantt-target"></div>
+                <div class="modal-body p-0">
+                    <!-- Gantt Target -->
+                    <div id="gantt-target" class="p-3 border-bottom" style="min-height: 300px;"></div>
+                    
+                    <hr class="m-0">
+                    
+                    <!-- Integrated Communication Panel -->
+                    <div id="gantt-communication-panel" class="p-4 bg-light">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="fw-bold text-secondary mb-0">Comunicación y Comentarios del Proyecto</h6>
+                            <span id="selected-phase-badge" class="badge bg-info text-dark" style="display: none;"></span>
+                        </div>
+                        
+                        <!-- Formulario de nuevo comentario (Oculto por defecto) -->
+                        <div id="create-comment-container" class="mb-4" style="display: none;">
+                            <form id="create-comment-form">
+                                <input type="hidden" id="comment-phase-id">
+                                <div class="input-group shadow-sm">
+                                    <textarea class="form-control" placeholder="Escribe un comentario sobre la fase seleccionada..."
+                                        id="new-comment-text" style="height: 60px" required></textarea>
+                                    <button type="submit" class="btn btn-primary px-4 fw-bold">
+                                        Publicar
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+
+                        <!-- Historial de Comentarios -->
+                        <div id="comments-wrapper" class="rounded border bg-white" style="overflow-y: auto; max-height: 350px;">
+                            <div class="list-group list-group-flush" id="comments-list">
+                                <!-- Comments injected dynamically -->
+                                <p class="text-center text-muted py-4">Cargando comentarios...</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -384,6 +442,7 @@
                         <table class="table table-hover align-middle">
                             <thead class="table-light">
                                 <tr>
+                                    <th style="width: 40px;"></th>
                                     <th>Fase</th>
                                     <th>Peso (%)</th>
                                     <th>Fecha Inicio</th>
@@ -400,6 +459,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                    <button type="button" class="btn btn-success fw-bold" id="btn-save-all-phases" onclick="saveAllPhases()" style="display: none;">Guardar Todo</button>
                 </div>
             </div>
         </div>
@@ -435,43 +495,12 @@
         </div>
     </div>
 
-    <!-- Phase Comments Modal -->
-    <div class="modal fade" id="phaseCommentsModal" tabindex="-1" aria-labelledby="phaseCommentsModalLabel"
-        aria-hidden="true">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header bg-info text-white">
-                    <h5 class="modal-title fw-bold" id="phaseCommentsModalLabel">Comentarios de Fase</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
-                        aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="mb-4">
-                        <form id="create-comment-form">
-                            <input type="hidden" id="comment-phase-id">
-                            <div class="form-floating mb-2">
-                                <textarea class="form-control" placeholder="Escribe un comentario aquí"
-                                    id="new-comment-text" style="height: 100px" required></textarea>
-                                <label for="new-comment-text">Nuevo Comentario</label>
-                            </div>
-                            <div class="text-end">
-                                <button type="submit" class="btn btn-sm btn-primary">Añadir Comentario</button>
-                            </div>
-                        </form>
-                    </div>
-                    <h6 class="fw-bold mb-3">Historial de Comentarios</h6>
-                    <div class="list-group" id="comments-list">
-                        <!-- Comments injected dynamically -->
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <!-- Bootstrap 5 JS Bundle -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <!-- Frappe Gantt JS -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/frappe-gantt/0.6.1/frappe-gantt.min.js"></script>
+    <!-- SortableJS -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <!-- Custom JS -->
     <script src="app.js"></script>
 </body>

@@ -35,3 +35,94 @@ body {
     color: #dc3545;
     font-weight: bold;
 }
+
+/* =========================================================
+   GANTT — Enterprise Visual Enhancements (Fase 27)
+   ========================================================= */
+
+/* ── Contenedor del modal ── */
+.gantt-modal-body {
+    background-color: #f8f9fb;
+    padding: 1rem 1.25rem;
+    min-height: 320px;
+}
+
+/* ── Efecto cebra en las filas del grid ── */
+.gantt .grid-row:nth-child(even) {
+    fill: #f0f4fa;
+}
+.gantt .grid-row:nth-child(odd) {
+    fill: #ffffff;
+}
+
+/* Líneas de cuadrícula más suaves */
+.gantt .grid-header {
+    fill: #e9ecef;
+    stroke: #dee2e6;
+}
+.gantt .tick {
+    stroke: #dee2e6;
+    stroke-width: 1;
+}
+
+/* ── Colores de barra por estado ── */
+
+/* Completed → verde corporativo */
+.gantt .bar-wrapper.gantt-completed .bar {
+    fill: #198754 !important;
+}
+.gantt .bar-wrapper.gantt-completed .bar-progress {
+    fill: #0f5132 !important;
+}
+
+/* In Progress → azul PMO */
+.gantt .bar-wrapper.gantt-progress .bar {
+    fill: #0d6efd !important;
+}
+.gantt .bar-wrapper.gantt-progress .bar-progress {
+    fill: #084298 !important;
+}
+
+/* Pending → gris neutral */
+.gantt .bar-wrapper.gantt-pending .bar {
+    fill: #adb5bd !important;
+}
+.gantt .bar-wrapper.gantt-pending .bar-progress {
+    fill: #6c757d !important;
+}
+
+/* ── Texto de la barra: siempre visible aunque sea angosta ── */
+.gantt .bar-label {
+    fill: #ffffff !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    dominant-baseline: central;
+    /* Permitir overflow para barras muy pequeñas */
+    overflow: visible !important;
+    clip-path: none !important;
+}
+
+/* Si el label queda fuera de la barra, lo ponemos oscuro */
+.gantt .bar-label.big {
+    fill: #212529 !important;
+}
+
+/* ── Selector de escala — botón activo con fondo sólido ── */
+.btn-group .gantt-view-btn.active {
+    background-color: #0d6efd;
+    color: #ffffff;
+    border-color: #0d6efd;
+    font-weight: 600;
+}
+
+/* ── Leyenda de estados ── */
+.gantt-legend-dot {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+.gantt-legend-completed { background-color: #198754; }
+.gantt-legend-progress  { background-color: #0d6efd; }
+.gantt-legend-pending   { background-color: #adb5bd; }

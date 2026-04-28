@@ -5,6 +5,7 @@ let authToken = localStorage.getItem('token');
 let currentUserRole = localStorage.getItem('role');
 let currentUserPermissions = JSON.parse(localStorage.getItem('permissions') || '[]');
 let currentManageProjectId = null;
+let currentGanttProjectId = null; // ID del proyecto activo en el Gantt
 let editingRoleId = null; // Estado para edición de roles
 let allPermissions = [];  // Caché de permisos para mapeo de nombres
 
@@ -325,6 +326,11 @@ function renderProjects(projects) {
     });
 }
 
+// Module-level Gantt state
+let currentGanttInstance = null;
+let currentGanttTasks = [];
+let currentGanttViewMode = 'Week';
+
 async function showProjectGantt(projectId, projectName) {
     try {
         const response = await fetch(`/api/v1/projects/${projectId}/phases`, {
@@ -335,14 +341,18 @@ async function showProjectGantt(projectId, projectName) {
 
         const ganttTarget = document.getElementById('gantt-target');
         ganttTarget.innerHTML = '';
+        currentGanttInstance = null;
+        currentGanttTasks = [];
 
         if (phases.length === 0) {
             ganttTarget.innerHTML = '<p class="text-muted p-3">No hay fases.</p>';
         } else {
-            const tasks = phases.map(p => {
+            currentGanttTasks = phases.map(p => {
                 let progress = 0;
-                if (p.status === 'Completed') progress = 100;
-                else if (p.status === 'In Progress') progress = 50;
+                let custom_class = 'gantt-pending';
+
+                if (p.status === 'Completed') { progress = 100; custom_class = 'gantt-completed'; }
+                else if (p.status === 'In Progress') { progress = 50; custom_class = 'gantt-progress'; }
 
                 return {
                     id: `Phase_${p.id}`,
@@ -350,28 +360,88 @@ async function showProjectGantt(projectId, projectName) {
                     start: p.start_date,
                     end: p.estimated_end_date,
                     progress: progress,
+                    custom_class: custom_class,
                     dependencies: ''
                 };
             });
 
-            new Gantt('#gantt-target', tasks, {
-                view_mode: 'Month',
+            currentGanttInstance = new Gantt('#gantt-target', currentGanttTasks, {
+                view_mode: currentGanttViewMode,
                 language: 'es',
                 on_click: function (task) {
                     // task.id tiene formato "Phase_X" — extraemos el entero X
                     const phaseId = parseInt(task.id.split('_')[1], 10);
-                    openPhaseComments(phaseId);
+                    selectPhaseForComment(phaseId, task.name);
                 }
             });
         }
 
+        // Cargar y renderizar la comunicación integrada del proyecto
+        await fetchProjectComments(projectId);
+
+        // Resetear el estado de selección del formulario de comentarios
+        document.getElementById('create-comment-container').style.display = 'none';
+        document.getElementById('selected-phase-badge').style.display = 'none';
+        document.getElementById('selected-phase-badge').innerText = '';
+
         document.getElementById('ganttModalLabel').innerText = `Gantt: ${projectName}`;
+
+        // Sincronizar botones de escala con el estado actual
+        document.querySelectorAll('.gantt-view-btn').forEach(btn => btn.classList.remove('active'));
+        const activeBtn = document.getElementById(`gantt-view-${currentGanttViewMode.toLowerCase()}`);
+        if (activeBtn) activeBtn.classList.add('active');
+
         new bootstrap.Modal(document.getElementById('ganttModal')).show();
     } catch (error) {
         console.error(error);
         alert('Error al cargar Gantt.');
     }
 }
+
+function setGanttViewMode(mode) {
+    currentGanttViewMode = mode;
+
+    // Actualizar estado visual de los botones
+    document.querySelectorAll('.gantt-view-btn').forEach(btn => btn.classList.remove('active'));
+    const activeBtn = document.getElementById(`gantt-view-${mode.toLowerCase()}`);
+    if (activeBtn) activeBtn.classList.add('active');
+
+    // Reconstruir el Gantt con el nuevo view_mode si hay una instancia activa
+    if (currentGanttTasks.length > 0) {
+        const ganttTarget = document.getElementById('gantt-target');
+        ganttTarget.innerHTML = '';
+        currentGanttInstance = new Gantt('#gantt-target', currentGanttTasks, {
+            view_mode: mode,
+            language: 'es',
+            on_click: function (task) {
+                const phaseId = parseInt(task.id.split('_')[1], 10);
+                selectPhaseForComment(phaseId, task.name);
+            }
+        });
+    }
+}
+
+/**
+ * Activa el formulario de comentarios para una fase específica seleccionada en el Gantt.
+ */
+function selectPhaseForComment(phaseId, phaseName) {
+    const container = document.getElementById('create-comment-container');
+    const badge = document.getElementById('selected-phase-badge');
+    const inputId = document.getElementById('comment-phase-id');
+    const textarea = document.getElementById('new-comment-text');
+
+    if (container && badge && inputId) {
+        inputId.value = phaseId;
+        badge.innerText = `Fase: ${phaseName}`;
+        badge.style.display = 'inline-block';
+        container.style.display = 'block';
+
+        // Scroll suave hasta el formulario si es necesario
+        container.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        if (textarea) textarea.focus();
+    }
+}
+
 
 async function openManagePhases(projectId) {
     currentManageProjectId = projectId;
@@ -392,11 +462,18 @@ async function openManagePhases(projectId) {
             createPhaseContainer.style.display = canWriteProjects ? 'block' : 'none';
         }
 
+        // Mostrar/Ocultar botón "Guardar Todo"
+        const btnSaveAll = document.getElementById('btn-save-all-phases');
+        if (btnSaveAll) {
+            btnSaveAll.style.display = (canEditPhases || canWriteProjects) ? 'inline-block' : 'none';
+        }
+
         const tbody = document.getElementById('phases-table-body');
         tbody.innerHTML = '';
 
         phases.forEach(p => {
             const tr = document.createElement('tr');
+            tr.setAttribute('data-phase-id', p.id);
 
             // Las fechas y detalles estructurales solo editables si puede escribir proyectos
             const dateDisabled = canWriteProjects ? '' : 'disabled';
@@ -405,6 +482,7 @@ async function openManagePhases(projectId) {
             const detailsDisabled = canWriteProjects ? '' : 'disabled';
 
             tr.innerHTML = `
+                <td class="drag-handle text-muted" style="cursor: grab; font-size: 1.2rem;">☰</td>
                 <td><input type="text" class="form-control form-control-sm phase-name" value="${p.phase_name}" ${detailsDisabled}></td>
                 <td><input type="number" class="form-control form-control-sm phase-weight" value="${p.weight_percentage || 0}" min="0" max="100" ${detailsDisabled}></td>
                 <td><input type="date" class="form-control form-control-sm date-start" value="${p.start_date}" ${dateDisabled}></td>
@@ -417,58 +495,98 @@ async function openManagePhases(projectId) {
                     </select>
                 </td>
                 <td>
-                    <button class="btn btn-sm btn-success" onclick="updatePhase(${p.id}, this)">Guardar</button>
-                    ${canDeleteProjects ? `<button class="btn btn-sm btn-danger ms-1" onclick="deletePhase(${p.id})">Eliminar</button>` : ''}
-                    <button class="btn btn-sm btn-info ms-1 text-white" onclick="openPhaseComments(${p.id})">Comentarios</button>
+                    ${canDeleteProjects ? `<button class="btn btn-sm btn-danger" onclick="deletePhase(${p.id})">Eliminar</button>` : ''}
                 </td>
             `;
             tbody.appendChild(tr);
         });
 
-        new bootstrap.Modal(document.getElementById('managePhasesModal')).show();
+        // Inicializar SortableJS para reordenar fases
+        if (canWriteProjects || canEditPhases) {
+            new Sortable(tbody, {
+                handle: '.drag-handle',
+                animation: 150,
+                ghostClass: 'bg-light'
+            });
+        }
+
+        const modalEl = document.getElementById('managePhasesModal');
+        const modalInstance = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+        modalInstance.show();
     } catch (error) {
         console.error(error);
     }
 }
 
-async function updatePhase(phaseId, btnElement) {
-    const row = btnElement.closest('tr');
-    const newStart = row.querySelector('.date-start').value;
-    const newEnd = row.querySelector('.date-end').value;
-    const newStatus = row.querySelector('.status-select').value;
+async function saveAllPhases() {
+    const btnSaveAll = document.getElementById('btn-save-all-phases');
+    const rows = document.querySelectorAll('#phases-table-body tr');
 
-    const phaseNameInput = row.querySelector('.phase-name');
-    const phaseWeightInput = row.querySelector('.phase-weight');
-    const newName = phaseNameInput ? phaseNameInput.value : null;
-    const newWeight = phaseWeightInput ? parseInt(phaseWeightInput.value, 10) : null;
+    if (rows.length === 0) return;
 
-    try {
-        // Actualizar fechas y detalles estructurales si el usuario tiene permiso 'write:projects'
+    btnSaveAll.disabled = true;
+    const originalText = btnSaveAll.innerText;
+    btnSaveAll.innerText = 'Guardando...';
+
+    const promises = [];
+
+    rows.forEach((row, index) => {
+        const phaseId = row.getAttribute('data-phase-id');
+        if (!phaseId) return;
+
+        const newStart = row.querySelector('.date-start').value;
+        const newEnd = row.querySelector('.date-end').value;
+        const newStatus = row.querySelector('.status-select').value;
+        const newName = row.querySelector('.phase-name').value;
+        const newWeight = parseInt(row.querySelector('.phase-weight').value, 10);
+        const displayOrder = index; // Nueva posición basada en el DOM
+
+        // Actualizar fechas y detalles si el usuario tiene permiso 'write:projects'
         if (currentUserPermissions.includes('write:projects')) {
-            await fetch(`/api/v1/phases/${phaseId}/dates`, {
+            promises.push(fetch(`/api/v1/phases/${phaseId}/dates`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
                 body: JSON.stringify({ start_date: newStart, estimated_end_date: newEnd })
-            });
-            await fetch(`/api/v1/phases/${phaseId}/details`, {
+            }));
+            promises.push(fetch(`/api/v1/phases/${phaseId}/details`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
-                body: JSON.stringify({ phase_name: newName, weight_percentage: newWeight })
-            });
+                body: JSON.stringify({ 
+                    phase_name: newName, 
+                    weight_percentage: newWeight,
+                    display_order: displayOrder 
+                })
+            }));
         }
+
         // Actualizar estado si el usuario tiene permiso 'edit:phases'
         if (currentUserPermissions.includes('edit:phases')) {
-            await fetch(`/api/v1/phases/${phaseId}`, {
+            promises.push(fetch(`/api/v1/phases/${phaseId}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
                 body: JSON.stringify({ status: newStatus })
-            });
+            }));
         }
-        alert('Fase actualizada correctamente');
-        fetchProjects();
+    });
+
+    try {
+        const results = await Promise.all(promises);
+        const allOk = results.every(res => res.ok);
+
+        if (allOk) {
+            alert('Todas las fases han sido actualizadas correctamente.');
+            fetchProjects();
+            // Refrescar el contenido del modal para asegurar que los datos estén sincronizados
+            openManagePhases(currentManageProjectId);
+        } else {
+            throw new Error('Algunas actualizaciones fallaron. Revisa la consola para más detalles.');
+        }
     } catch (error) {
-        console.error(error);
-        alert('Error al actualizar fase');
+        console.error('Error en saveAllPhases:', error);
+        alert('Error al guardar cambios masivos: ' + error.message);
+    } finally {
+        btnSaveAll.disabled = false;
+        btnSaveAll.innerText = originalText;
     }
 }
 
@@ -600,46 +718,68 @@ async function fetchBacklog() {
 }
 
 async function openPhaseComments(phaseId) {
-    document.getElementById('comment-phase-id').value = phaseId;
-    await fetchPhaseComments(phaseId);
-    new bootstrap.Modal(document.getElementById('phaseCommentsModal')).show();
+    // Como ahora los comentarios están integrados en el Gantt, 
+    // esta función podría redirigir al Gantt y seleccionar la fase.
+    // Sin embargo, por simplicidad en esta fase, la hemos eliminado de los botones directos.
+    console.log("openPhaseComments llamado para ID:", phaseId);
 }
 
-async function fetchPhaseComments(phaseId) {
+async function fetchProjectComments(projectId) {
+    const listGroup = document.getElementById('comments-list');
     try {
-        const response = await fetch(`/api/v1/phases/${phaseId}/comments`, {
+        const response = await fetch(`/api/v1/projects/${projectId}/comments`, {
             headers: { 'Authorization': 'Bearer ' + authToken }
         });
         if (response.status === 401) { handleLogout(); return; }
         const comments = await response.json();
-        const listGroup = document.getElementById('comments-list');
+        
         listGroup.innerHTML = '';
 
         if (comments.length === 0) {
-            listGroup.innerHTML = '<p class="text-muted text-center p-3">Aún no hay comentarios.</p>';
+            listGroup.innerHTML = `
+                <div class="text-center py-5">
+                    <p class="text-muted mb-0">No hay comentarios en este proyecto.</p>
+                    <small class="text-secondary">Haz clic en una fase del diagrama para iniciar una conversación.</small>
+                </div>`;
             return;
         }
 
         comments.forEach(comment => {
             const div = document.createElement('div');
-            div.className = 'list-group-item list-group-item-action flex-column align-items-start mb-2 border rounded';
-            const dateStr = new Date(comment.created_at).toLocaleString('es-ES');
+            // Estilo premium: borde lateral de color info para destacar que son comentarios de fase
+            div.className = 'list-group-item border-0 border-start border-4 border-info bg-white mb-3 shadow-sm rounded-end';
+            const dateStr = new Date(comment.created_at).toLocaleString('es-ES', {
+                day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+            });
+            
             div.innerHTML = `
-                <div class="d-flex w-100 justify-content-between">
-                    <h6 class="mb-1 fw-bold text-primary">${comment.user_name}</h6>
-                    <small class="text-muted">${dateStr}</small>
+                <div class="d-flex w-100 justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0 fw-bold text-dark">${comment.user_name}</h6>
+                    <small class="text-muted fw-semibold" style="font-size: 0.75rem;">${dateStr}</small>
                 </div>
-                <p class="mb-1 text-dark mt-2">${comment.comment_text}</p>
+                <div class="mb-2">
+                    <span class="badge bg-info text-dark" style="font-size: 0.7rem;">Fase: ${comment.phase_name}</span>
+                </div>
+                <p class="mb-0 text-secondary" style="white-space: pre-wrap; font-size: 0.9rem;">${comment.comment_text}</p>
             `;
             listGroup.appendChild(div);
         });
-    } catch (error) { console.error(error); }
+    } catch (error) { 
+        console.error(error); 
+        listGroup.innerHTML = '<p class="text-danger p-3">Error al cargar la comunicación.</p>';
+    }
 }
 
 async function createPhaseComment(e) {
     e.preventDefault();
     const phaseId = document.getElementById('comment-phase-id').value;
-    const commentText = document.getElementById('new-comment-text').value;
+    const commentTextInput = document.getElementById('new-comment-text');
+    const commentText = commentTextInput.value;
+
+    if (!phaseId) {
+        alert("Por favor, selecciona una fase en el diagrama de Gantt primero.");
+        return;
+    }
 
     try {
         const response = await fetch(`/api/v1/phases/${phaseId}/comments`, {
@@ -650,9 +790,14 @@ async function createPhaseComment(e) {
         if (response.status === 401) { handleLogout(); return; }
         if (!response.ok) throw new Error('Error al añadir comentario');
 
-        document.getElementById('create-comment-form').reset();
-        await fetchPhaseComments(phaseId);
-    } catch (error) { alert('No se pudo añadir el comentario'); }
+        commentTextInput.value = '';
+        // Refrescar la vista consolidada de comentarios del proyecto
+        await fetchProjectComments(currentGanttProjectId);
+        
+        // Mantener el formulario visible para permitir más comentarios seguidos
+    } catch (error) { 
+        alert('No se pudo añadir el comentario: ' + error.message); 
+    }
 }
 
 // -------------------------------------------------------------------------
