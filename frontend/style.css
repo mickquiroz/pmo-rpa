@@ -12,12 +12,12 @@ body {
     height: 1.25rem;
     border-radius: 0.5rem;
     background-color: #e9ecef;
-    box-shadow: inset 0 1px 2px rgba(0,0,0,.075);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, .075);
 }
 
 .progress-bar {
     font-weight: bold;
-    text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
     font-size: 0.85rem;
 }
 
@@ -51,6 +51,7 @@ body {
 .gantt .grid-row:nth-child(even) {
     fill: #f0f4fa;
 }
+
 .gantt .grid-row:nth-child(odd) {
     fill: #ffffff;
 }
@@ -60,6 +61,7 @@ body {
     fill: #e9ecef;
     stroke: #dee2e6;
 }
+
 .gantt .tick {
     stroke: #dee2e6;
     stroke-width: 1;
@@ -71,6 +73,7 @@ body {
 .gantt .bar-wrapper.gantt-completed .bar {
     fill: #198754 !important;
 }
+
 .gantt .bar-wrapper.gantt-completed .bar-progress {
     fill: #0f5132 !important;
 }
@@ -79,6 +82,7 @@ body {
 .gantt .bar-wrapper.gantt-progress .bar {
     fill: #0d6efd !important;
 }
+
 .gantt .bar-wrapper.gantt-progress .bar-progress {
     fill: #084298 !important;
 }
@@ -87,6 +91,7 @@ body {
 .gantt .bar-wrapper.gantt-pending .bar {
     fill: #adb5bd !important;
 }
+
 .gantt .bar-wrapper.gantt-pending .bar-progress {
     fill: #6c757d !important;
 }
@@ -123,8 +128,19 @@ body {
     border-radius: 3px;
     flex-shrink: 0;
 }
-.gantt-legend-pending   { background-color: #adb5bd; }
- 
+
+.gantt-legend-pending {
+    background-color: #adb5bd;
+}
+
+.gantt-legend-progress {
+    background-color: #0d6efd;
+}
+
+.gantt-legend-completed {
+    background-color: #198754;
+}
+
 /* =========================================================
    SOCIAL PMO UI — Phase 32
    ========================================================= */
@@ -142,7 +158,7 @@ body {
 
 .comment-item:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 
 .comment-avatar {
@@ -157,7 +173,7 @@ body {
     font-weight: 800;
     font-size: 1.1rem;
     color: white;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .comment-avatar img {
@@ -227,4 +243,3 @@ body {
     line-height: 1.5;
     border-radius: 3px;
 }
-
