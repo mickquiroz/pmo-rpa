@@ -76,6 +76,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const createCommentForm = document.getElementById('create-comment-form');
     if (createCommentForm) createCommentForm.addEventListener('submit', createPhaseComment);
+
+    const btnProfile = document.getElementById('btn-profile');
+    if (btnProfile) btnProfile.addEventListener('click', fetchMyProfile);
+
+    const profileForm = document.getElementById('profile-form');
+    if (profileForm) profileForm.addEventListener('submit', handleUpdateProfile);
 });
 
 // -------------------------------------------------------------------------
@@ -147,8 +153,10 @@ function applyRoleUI() {
     const btnAdminProjectTypes = document.getElementById('btn-admin-project-types');
     const btnBacklog = document.getElementById('btn-backlog');
     const btnLogout = document.getElementById('btn-logout');
+    const btnProfile = document.getElementById('btn-profile');
 
     if (btnLogout) btnLogout.style.display = 'inline-block';
+    if (btnProfile) btnProfile.style.display = 'inline-block';
 
     // ── Panel de Super-Admin (Usuarios, Roles, Tipos): sólo usuarios con rol 'Admin'.
     // Respaldo explícito por rol para el panel administrativo superior.
@@ -332,6 +340,7 @@ let currentGanttTasks = [];
 let currentGanttViewMode = 'Week';
 
 async function showProjectGantt(projectId, projectName) {
+    currentGanttProjectId = projectId;
     try {
         const response = await fetch(`/api/v1/projects/${projectId}/phases`, {
             headers: { 'Authorization': 'Bearer ' + authToken }
@@ -439,6 +448,9 @@ function selectPhaseForComment(phaseId, phaseName) {
         // Scroll suave hasta el formulario si es necesario
         container.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         if (textarea) textarea.focus();
+
+        // Filtrar comentarios por esta fase
+        fetchProjectComments(currentGanttProjectId, phaseId);
     }
 }
 
@@ -551,10 +563,10 @@ async function saveAllPhases() {
             promises.push(fetch(`/api/v1/phases/${phaseId}/details`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
-                body: JSON.stringify({ 
-                    phase_name: newName, 
+                body: JSON.stringify({
+                    phase_name: newName,
                     weight_percentage: newWeight,
-                    display_order: displayOrder 
+                    display_order: displayOrder
                 })
             }));
         }
@@ -724,21 +736,43 @@ async function openPhaseComments(phaseId) {
     console.log("openPhaseComments llamado para ID:", phaseId);
 }
 
-async function fetchProjectComments(projectId) {
+/**
+ * Genera el HTML para el avatar del usuario (Imagen o Inicial con color).
+ */
+function getAvatar(user) {
+    if (user.profile_picture) {
+        return `<div class="comment-avatar"><img src="${user.profile_picture}" alt="${user.user_name}"></div>`;
+    }
+    const colors = ['#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74a3b', '#858796', '#5a5c69', '#6610f2', '#6f42c1', '#e83e8c'];
+    const charCode = user.user_name ? user.user_name.charCodeAt(0) : 65;
+    const color = colors[charCode % colors.length];
+    const initial = user.user_name ? user.user_name.charAt(0).toUpperCase() : '?';
+    return `<div class="comment-avatar" style="background-color: ${color}">${initial}</div>`;
+}
+
+async function fetchProjectComments(projectId, phaseId = null) {
     const listGroup = document.getElementById('comments-list');
+    const btnShowAll = document.getElementById('btn-show-all-comments');
+    
+    // Si hay phaseId, mostramos el botón de reset
+    if (btnShowAll) btnShowAll.style.display = phaseId ? 'inline-block' : 'none';
+
     try {
-        const response = await fetch(`/api/v1/projects/${projectId}/comments`, {
+        let url = `/api/v1/projects/${projectId}/comments`;
+        if (phaseId) url += `?phase_id=${phaseId}`;
+
+        const response = await fetch(url, {
             headers: { 'Authorization': 'Bearer ' + authToken }
         });
         if (response.status === 401) { handleLogout(); return; }
         const comments = await response.json();
-        
+
         listGroup.innerHTML = '';
 
         if (comments.length === 0) {
             listGroup.innerHTML = `
                 <div class="text-center py-5">
-                    <p class="text-muted mb-0">No hay comentarios en este proyecto.</p>
+                    <p class="text-muted mb-0">${phaseId ? 'No hay comentarios en esta fase.' : 'No hay comentarios en este proyecto.'}</p>
                     <small class="text-secondary">Haz clic en una fase del diagrama para iniciar una conversación.</small>
                 </div>`;
             return;
@@ -746,28 +780,50 @@ async function fetchProjectComments(projectId) {
 
         comments.forEach(comment => {
             const div = document.createElement('div');
-            // Estilo premium: borde lateral de color info para destacar que son comentarios de fase
-            div.className = 'list-group-item border-0 border-start border-4 border-info bg-white mb-3 shadow-sm rounded-end';
+            div.className = 'comment-item';
+            
             const dateStr = new Date(comment.created_at).toLocaleString('es-ES', {
                 day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
             });
-            
+
+            const avatarHtml = getAvatar(comment);
+
             div.innerHTML = `
-                <div class="d-flex w-100 justify-content-between align-items-center mb-2">
-                    <h6 class="mb-0 fw-bold text-dark">${comment.user_name}</h6>
-                    <small class="text-muted fw-semibold" style="font-size: 0.75rem;">${dateStr}</small>
+                ${avatarHtml}
+                <div class="comment-body">
+                    <div class="comment-header">
+                        <div class="comment-user-info">
+                            <span class="comment-user-name">${comment.user_name}</span>
+                            <span class="comment-user-role">${comment.role_name || 'Usuario'}</span>
+                        </div>
+                        <span class="comment-date">${dateStr}</span>
+                    </div>
+                    <p class="comment-text">${comment.comment_text}</p>
+                    ${!phaseId ? `<span class="comment-phase-tag">Fase: ${comment.phase_name}</span>` : ''}
                 </div>
-                <div class="mb-2">
-                    <span class="badge bg-info text-dark" style="font-size: 0.7rem;">Fase: ${comment.phase_name}</span>
-                </div>
-                <p class="mb-0 text-secondary" style="white-space: pre-wrap; font-size: 0.9rem;">${comment.comment_text}</p>
             `;
             listGroup.appendChild(div);
         });
-    } catch (error) { 
-        console.error(error); 
+    } catch (error) {
+        console.error(error);
         listGroup.innerHTML = '<p class="text-danger p-3">Error al cargar la comunicación.</p>';
     }
+}
+
+function resetCommentsFilter() {
+    if (!currentGanttProjectId) return;
+    
+    const badge = document.getElementById('selected-phase-badge');
+    const container = document.getElementById('create-comment-container');
+    const inputId = document.getElementById('comment-phase-id');
+    const btnShowAll = document.getElementById('btn-show-all-comments');
+    
+    if (badge) badge.style.display = 'none';
+    if (container) container.style.display = 'none';
+    if (inputId) inputId.value = '';
+    if (btnShowAll) btnShowAll.style.display = 'none';
+    
+    fetchProjectComments(currentGanttProjectId);
 }
 
 async function createPhaseComment(e) {
@@ -791,12 +847,13 @@ async function createPhaseComment(e) {
         if (!response.ok) throw new Error('Error al añadir comentario');
 
         commentTextInput.value = '';
-        // Refrescar la vista consolidada de comentarios del proyecto
-        await fetchProjectComments(currentGanttProjectId);
-        
+        // Refrescar la vista consolidada de comentarios del proyecto (manteniendo el filtro si existe)
+        const currentFilterPhaseId = document.getElementById('comment-phase-id').value;
+        await fetchProjectComments(currentGanttProjectId, currentFilterPhaseId);
+
         // Mantener el formulario visible para permitir más comentarios seguidos
-    } catch (error) { 
-        alert('No se pudo añadir el comentario: ' + error.message); 
+    } catch (error) {
+        alert('No se pudo añadir el comentario: ' + error.message);
     }
 }
 
@@ -1190,5 +1247,104 @@ async function createProjectType(e) {
         fetchProjectTypes();
     } catch (error) {
         errorContainer.innerHTML = `<div class="alert alert-danger py-2 mb-3">${error.message}</div>`;
+    }
+}
+// -------------------------------------------------------------------------
+// MÓDULO: Mi Perfil (Self-Service)
+// -------------------------------------------------------------------------
+
+async function fetchMyProfile() {
+    const errorContainer = document.getElementById('profile-error-container');
+    if (errorContainer) errorContainer.innerHTML = '';
+
+    try {
+        const response = await fetch('/api/v1/users/me', {
+            headers: { 'Authorization': 'Bearer ' + authToken }
+        });
+        if (response.status === 401) { handleLogout(); return; }
+        if (!response.ok) throw new Error('No se pudo cargar la información del perfil.');
+
+        const user = await response.json();
+
+        // Poblar formulario
+        document.getElementById('profile-name').value = user.name;
+        document.getElementById('profile-photo').value = user.profile_picture || '';
+        document.getElementById('profile-email-display').innerText = user.email;
+        document.getElementById('profile-role-display').innerText = user.role_name;
+        document.getElementById('profile-password').value = ''; // Siempre vacío por seguridad
+
+        renderProfilePreview(user);
+    } catch (error) {
+        console.error(error);
+        if (errorContainer) errorContainer.innerHTML = '<div class="alert alert-danger py-2">' + error.message + '</div>';
+    }
+}
+
+function renderProfilePreview(user) {
+    const preview = document.getElementById('profile-avatar-preview');
+    if (!preview) return;
+
+    if (user.profile_picture) {
+        preview.innerHTML = '<img src="' + user.profile_picture + '" alt="' + user.name + '" style="width: 100%; height: 100%; object-fit: cover;">';
+    } else {
+        const initial = user.name ? user.name.charAt(0).toUpperCase() : '?';
+        preview.innerHTML = initial;
+    }
+}
+
+async function handleUpdateProfile(e) {
+    e.preventDefault();
+    const btnSave = document.getElementById('btn-save-profile');
+    const errorContainer = document.getElementById('profile-error-container');
+
+    const name = document.getElementById('profile-name').value;
+    const photo = document.getElementById('profile-photo').value;
+    const password = document.getElementById('profile-password').value;
+
+    const payload = {
+        name: name,
+        profile_picture: photo || null
+    };
+
+    if (password && password.trim().length >= 6) {
+        payload.password = password;
+    } else if (password && password.trim().length > 0) {
+        errorContainer.innerHTML = '<div class="alert alert-warning py-2">La contraseña debe tener al menos 6 caracteres.</div>';
+        return;
+    }
+
+    btnSave.disabled = true;
+    const originalText = btnSave.innerText;
+    btnSave.innerText = 'Actualizando...';
+    if (errorContainer) errorContainer.innerHTML = '';
+
+    try {
+        const response = await fetch('/api/v1/users/me', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + authToken
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (response.status === 401) { handleLogout(); return; }
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.detail || 'Error al actualizar el perfil.');
+        }
+
+        const updatedUser = await response.json();
+        renderProfilePreview(updatedUser);
+        alert('¡Perfil actualizado con éxito!');
+        
+        document.getElementById('profile-password').value = '';
+        fetchProjects();
+    } catch (error) {
+        console.error(error);
+        if (errorContainer) errorContainer.innerHTML = '<div class="alert alert-danger py-2">' + error.message + '</div>';
+    } finally {
+        btnSave.disabled = false;
+        btnSave.innerText = originalText;
     }
 }

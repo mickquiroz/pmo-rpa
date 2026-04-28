@@ -272,9 +272,16 @@ class UserResponse(BaseModel):
     role_id: int
     role_name: str
     is_active: int
+    profile_picture: Optional[str] = None
 
     class Config:
         from_attributes = True
+
+class UserUpdateMe(BaseModel):
+    """Payload para que un usuario actualice su propio perfil."""
+    name: Optional[str] = Field(None, min_length=2)
+    profile_picture: Optional[str] = None
+    password: Optional[str] = Field(None, min_length=6)
 
 class RoleCreate(BaseModel):
     name: str = Field(..., min_length=2)
@@ -320,6 +327,8 @@ class PhaseCommentResponse(BaseModel):
     phase_id: int
     user_id: int
     user_name: str
+    role_name: Optional[str] = None
+    profile_picture: Optional[str] = None
     comment_text: str
     created_at: str
 
@@ -334,6 +343,8 @@ class ProjectCommentResponse(BaseModel):
     phase_name: str
     user_id: int
     user_name: str
+    role_name: Optional[str] = None
+    profile_picture: Optional[str] = None
     comment_text: str
     created_at: str
 
@@ -1286,9 +1297,10 @@ def list_phase_comments(phase_id: int, _: dict = Depends(get_current_user)) -> L
     with get_db() as conn:
         rows = conn.execute(
             """
-            SELECT c.id, c.phase_id, c.user_id, u.name as user_name, c.comment_text, c.created_at
+            SELECT c.id, c.phase_id, c.user_id, u.name as user_name, r.name as role_name, u.profile_picture, c.comment_text, c.created_at
             FROM Phase_Comments c
             JOIN Users u ON c.user_id = u.id
+            JOIN Roles r ON u.role_id = r.id
             WHERE c.phase_id = ?
             ORDER BY c.created_at DESC
             """,
@@ -1324,9 +1336,10 @@ def create_phase_comment(phase_id: int, payload: PhaseCommentCreate, current_use
         
         new_comment = conn.execute(
             """
-            SELECT c.id, c.phase_id, c.user_id, u.name as user_name, c.comment_text, c.created_at
+            SELECT c.id, c.phase_id, c.user_id, u.name as user_name, r.name as role_name, u.profile_picture, c.comment_text, c.created_at
             FROM Phase_Comments c
             JOIN Users u ON c.user_id = u.id
+            JOIN Roles r ON u.role_id = r.id
             WHERE c.id = ?
             """,
             (new_id,)
@@ -1342,31 +1355,91 @@ def create_phase_comment(phase_id: int, payload: PhaseCommentCreate, current_use
     summary="Lista todos los comentarios de un proyecto (todas sus fases)",
     status_code=status.HTTP_200_OK,
 )
-def list_project_comments(project_id: int, _: dict = Depends(get_current_user)) -> List[dict]:
+def list_project_comments(project_id: int, phase_id: Optional[int] = None, _: dict = Depends(get_current_user)) -> List[dict]:
     """
     Obtiene todos los comentarios de todas las fases asociadas a un proyecto específico.
     Incluye el nombre de la fase para contexto en la vista consolidada.
     """
+    query = """
+        SELECT 
+            c.id, 
+            c.phase_id, 
+            p.phase_name, 
+            c.user_id, 
+            u.name as user_name, 
+            r.name as role_name,
+            u.profile_picture,
+            c.comment_text, 
+            c.created_at
+        FROM Phase_Comments c
+        JOIN Users u ON c.user_id = u.id
+        JOIN Roles r ON u.role_id = r.id
+        JOIN Phases p ON c.phase_id = p.id
+        WHERE p.project_id = ?
+    """
+    params = [project_id]
+    
+    if phase_id:
+        query += " AND c.phase_id = ?"
+        params.append(phase_id)
+        
+    query += " ORDER BY c.created_at DESC"
+    
     with get_db() as conn:
-        rows = conn.execute(
-            """
-            SELECT 
-                c.id, 
-                c.phase_id, 
-                p.phase_name, 
-                c.user_id, 
-                u.name as user_name, 
-                c.comment_text, 
-                c.created_at
-            FROM Phase_Comments c
-            JOIN Users u ON c.user_id = u.id
-            JOIN Phases p ON c.phase_id = p.id
-            WHERE p.project_id = ?
-            ORDER BY c.created_at DESC
-            """,
-            (project_id,)
-        ).fetchall()
+        rows = conn.execute(query, tuple(params)).fetchall()
     return [dict(row) for row in rows]
+
+
+# ---------------------------------------------------------------------------
+# Self-Service Profile API
+# ---------------------------------------------------------------------------
+
+@app.get(f"{API_PREFIX}/users/me", tags=["Users"], response_model=UserResponse)
+def get_me(current_user: dict = Depends(get_current_user)):
+    """Retorna el perfil del usuario autenticado actualmente."""
+    # current_user ya viene de get_current_user con id, name, email, role
+    # Pero necesitamos role_name e is_active para UserResponse
+    with get_db() as conn:
+        user = conn.execute(
+            """
+            SELECT u.id, u.name, u.email, u.role_id, r.name as role_name, u.is_active, u.profile_picture
+            FROM Users u
+            JOIN Roles r ON u.role_id = r.id
+            WHERE u.id = ?
+            """,
+            (current_user["id"],)
+        ).fetchone()
+    return dict(user)
+
+@app.put(f"{API_PREFIX}/users/me", tags=["Users"], response_model=UserResponse)
+def update_me(payload: UserUpdateMe, current_user: dict = Depends(get_current_user)):
+    """Permite al usuario actualizar su propio nombre, foto o contraseña."""
+    updates = []
+    params = []
+    
+    if payload.name is not None:
+        updates.append("name = ?")
+        params.append(payload.name)
+    
+    if payload.profile_picture is not None:
+        updates.append("profile_picture = ?")
+        params.append(payload.profile_picture)
+        
+    if payload.password is not None:
+        updates.append("hashed_password = ?")
+        params.append(get_password_hash(payload.password))
+        
+    if not updates:
+        return get_me(current_user)
+        
+    params.append(current_user["id"])
+    query = f"UPDATE Users SET {', '.join(updates)} WHERE id = ?"
+    
+    with get_db() as conn:
+        conn.execute(query, params)
+        conn.commit()
+        
+    return get_me(current_user)
 
 
 # ---------------------------------------------------------------------------

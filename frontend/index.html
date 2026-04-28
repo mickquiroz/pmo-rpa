@@ -31,6 +31,8 @@
                     Usuarios</button>
                 <button id="btn-backlog" class="btn btn-outline-warning btn-sm fw-semibold me-2"
                     style="display: none;">Ver Backlog</button>
+                <button id="btn-profile" class="btn btn-outline-light btn-sm fw-semibold me-2"
+                    data-bs-toggle="modal" data-bs-target="#profileModal" style="display: none;">Mi Perfil</button>
                 <button id="btn-logout" class="btn btn-outline-light btn-sm fw-semibold" style="display: none;">Cerrar
                     Sesión</button>
             </div>
@@ -327,7 +329,12 @@
                     <div id="gantt-communication-panel" class="p-4 bg-light">
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <h6 class="fw-bold text-secondary mb-0">Comunicación y Comentarios del Proyecto</h6>
-                            <span id="selected-phase-badge" class="badge bg-info text-dark" style="display: none;"></span>
+                            <div class="d-flex align-items-center gap-2">
+                                <span id="selected-phase-badge" class="badge bg-info text-dark" style="display: none;"></span>
+                                <button id="btn-show-all-comments" class="btn btn-xs btn-link p-0 text-primary fw-semibold" style="display: none; font-size: 0.8rem; text-decoration: none;" onclick="resetCommentsFilter()">
+                                    Ver todos los comentarios
+                                </button>
+                            </div>
                         </div>
                         
                         <!-- Formulario de nuevo comentario (Oculto por defecto) -->
@@ -490,6 +497,52 @@
                             </tbody>
                         </table>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Profile Modal -->
+    <div class="modal fade" id="profileModal" tabindex="-1" aria-labelledby="profileModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title fw-bold" id="profileModalLabel">Mi Perfil</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                        aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div id="profile-error-container"></div>
+                    <form id="profile-form">
+                        <div class="text-center mb-4">
+                            <div id="profile-avatar-preview"
+                                class="mx-auto mb-2 d-flex align-items-center justify-content-center rounded-circle bg-light text-primary fw-bold shadow-sm"
+                                style="width: 80px; height: 80px; font-size: 2rem; overflow: hidden;">
+                                ?
+                            </div>
+                            <small class="text-muted d-block" id="profile-email-display"></small>
+                            <span class="badge bg-secondary mt-1" id="profile-role-display"></span>
+                        </div>
+                        <div class="mb-3">
+                            <label for="profile-name" class="form-label">Nombre Completo</label>
+                            <input type="text" class="form-control" id="profile-name" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="profile-photo" class="form-label">URL Foto de Perfil</label>
+                            <input type="url" class="form-control" id="profile-photo"
+                                placeholder="https://example.com/photo.jpg">
+                        </div>
+                        <div class="mb-4">
+                            <label for="profile-password" class="form-label">Nueva Contraseña (opcional)</label>
+                            <input type="password" class="form-control" id="profile-password" placeholder="********"
+                                minlength="6">
+                            <small class="text-muted">Mínimo 6 caracteres.</small>
+                        </div>
+                        <div class="d-grid shadow-sm">
+                            <button type="submit" class="btn btn-primary fw-bold" id="btn-save-profile">Guardar
+                                Cambios</button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>
