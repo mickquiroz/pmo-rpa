@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+pydantic
+python-dotenv
+passlib[bcrypt]
+python-jose[cryptography]
+langchain
+langchain-community
+langchain-anthropic
+sqlite3-api  # Note: sqlite3 is usually built-in, but some environments might need specific drivers if not using standard library

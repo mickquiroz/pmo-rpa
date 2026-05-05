@@ -82,6 +82,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const profileForm = document.getElementById('profile-form');
     if (profileForm) profileForm.addEventListener('submit', handleUpdateProfile);
+
+    // Chatbot Listeners (Fase 38)
+    const chatToggle = document.getElementById('chatbot-toggle');
+    if (chatToggle) chatToggle.addEventListener('click', toggleChat);
+
+    const chatClose = document.getElementById('chatbot-close');
+    if (chatClose) chatClose.addEventListener('click', toggleChat);
+
+    const chatForm = document.getElementById('chatbot-form');
+    if (chatForm) chatForm.addEventListener('submit', handleChatSubmit);
 });
 
 // -------------------------------------------------------------------------
@@ -187,6 +197,12 @@ function applyRoleUI() {
         populateDevelopersSelect();
         populateProjectTypesSelect();
         populateCommercialSelect();
+    }
+
+    // ── Widget de Chat (Fase 38): Visible si está logueado
+    const chatWidget = document.getElementById('chatbot-widget');
+    if (chatWidget) {
+        chatWidget.style.display = authToken ? 'block' : 'none';
     }
 }
 
@@ -1348,3 +1364,88 @@ async function handleUpdateProfile(e) {
         btnSave.innerText = originalText;
     }
 }
+
+// -------------------------------------------------------------------------
+// MÓDULO: Asistente IA PMO (Fase 38)
+// -------------------------------------------------------------------------
+
+function toggleChat() {
+    const chatWindow = document.getElementById('chatbot-window');
+    if (chatWindow) {
+        chatWindow.classList.toggle('d-none');
+        if (!chatWindow.classList.contains('d-none')) {
+            document.getElementById('chatbot-input').focus();
+        }
+    }
+}
+
+async function handleChatSubmit(e) {
+    e.preventDefault();
+    const input = document.getElementById('chatbot-input');
+    const message = input.value.trim();
+    if (!message) return;
+
+    // Renderizar mensaje del usuario
+    addChatMessage(message, 'user');
+    input.value = '';
+
+    // Mostrar indicador de carga
+    const typingId = showChatLoading();
+
+    try {
+        const response = await fetch('/api/v1/chat', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            },
+            body: JSON.stringify({ message: message })
+        });
+
+        if (!response.ok) {
+            if (response.status === 401) { handleLogout(); return; }
+            throw new Error('No se pudo obtener respuesta de la IA.');
+        }
+
+        const data = await response.json();
+        removeChatLoading(typingId);
+        addChatMessage(data.reply, 'bot');
+    } catch (error) {
+        removeChatLoading(typingId);
+        addChatMessage(`Error: ${error.message}`, 'bot', true);
+    }
+}
+
+function addChatMessage(text, sender, isError = false) {
+    const messagesContainer = document.getElementById('chatbot-messages');
+    if (!messagesContainer) return;
+
+    const div = document.createElement('div');
+    div.className = `chatbot-message chatbot-message-${sender}`;
+    if (isError) {
+        div.classList.add('bg-danger', 'text-white');
+    }
+    div.innerText = text;
+
+    messagesContainer.appendChild(div);
+    // Scroll al final
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+
+function showChatLoading() {
+    const messagesContainer = document.getElementById('chatbot-messages');
+    const id = 'typing-' + Date.now();
+    const div = document.createElement('div');
+    div.id = id;
+    div.className = 'chatbot-typing px-3';
+    div.innerText = 'La IA está pensando...';
+    messagesContainer.appendChild(div);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    return id;
+}
+
+function removeChatLoading(id) {
+    const el = document.getElementById(id);
+    if (el) el.remove();
+}
+

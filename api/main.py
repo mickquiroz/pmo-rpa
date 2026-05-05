@@ -30,6 +30,8 @@ from datetime import date
 from pathlib import Path
 from typing import Generator, List, Optional, Literal
 
+import os
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, status, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -39,6 +41,7 @@ from pydantic import BaseModel, Field
 from datetime import timedelta
 
 from .auth import verify_password, create_access_token, get_current_user, get_admin_user, get_password_hash, ACCESS_TOKEN_EXPIRE_MINUTES
+from .services.chatbot_service import get_assistant
 
 # ---------------------------------------------------------------------------
 # Configuración global
@@ -46,6 +49,9 @@ from .auth import verify_password, create_access_token, get_current_user, get_ad
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DB_PATH = BASE_DIR / "data" / "pmo_rpa.db"
+
+# Cargar variables de entorno
+load_dotenv(BASE_DIR / ".env")
 
 API_PREFIX = "/api/v1"
 
@@ -111,6 +117,19 @@ def init_db_schema() -> None:
 def on_startup() -> None:
     init_db_schema()
     seed_permissions()
+    
+    # Health Check interno para el Chatbot AI (Fase 1)
+    llm_key = os.getenv("LLM_API_KEY")
+    if not llm_key:
+        print("\n" + "!"*60)
+        print(" AVISO: Variable 'LLM_API_KEY' no encontrada en .env")
+        print(" El Asistente IA (Chatbot) estará inactivo en esta sesión.")
+        print("!"*60 + "\n")
+    else:
+        print("\n" + "*"*60)
+        print(" INFO: 'LLM_API_KEY' detectada correctamente.")
+        print(" Entorno preparado para integración con Anthropic Claude 3 Haiku.")
+        print("*"*60 + "\n")
 
 # ---------------------------------------------------------------------------
 # CORS — permite conexiones desde cualquier origen en el MVP local
@@ -350,6 +369,16 @@ class ProjectCommentResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ChatRequest(BaseModel):
+    """Payload de entrada para el Asistente IA."""
+    message: str = Field(..., min_length=1, description="Pregunta en lenguaje natural para la PMO.")
+
+
+class ChatResponse(BaseModel):
+    """Respuesta generada por el Asistente IA."""
+    reply: str
 
 
 # ---------------------------------------------------------------------------
@@ -1440,6 +1469,48 @@ def update_me(payload: UserUpdateMe, current_user: dict = Depends(get_current_us
         conn.commit()
         
     return get_me(current_user)
+
+
+# ---------------------------------------------------------------------------
+# AI Assistant API (Fase 3)
+# ---------------------------------------------------------------------------
+
+@app.post(
+    f"{API_PREFIX}/chat",
+    response_model=ChatResponse,
+    tags=["AI Assistant"],
+    summary="Consulta al Asistente IA de la PMO",
+    status_code=status.HTTP_200_OK,
+)
+def chat_with_assistant(
+    payload: ChatRequest, 
+    current_user: dict = Depends(get_current_user)
+) -> ChatResponse:
+    """
+    Endpoint para interactuar con el 'cerebro' IA de la PMO.
+    Traduce lenguaje natural a SQL y devuelve una respuesta resumida.
+    Requiere autenticación JWT.
+    """
+    try:
+        assistant = get_assistant()
+        response_text = assistant.ask_bot(payload.message)
+        
+        # Si ask_bot devolvió un mensaje de error interno (empezando con "Error al procesar")
+        # o si el LLM no está configurado, lanzamos excepción.
+        if response_text.startswith("Error al procesar la consulta:"):
+             raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=response_text
+            )
+            
+        return ChatResponse(reply=response_text)
+        
+    except Exception as e:
+        # Manejo de fallos críticos (ej: API Key no configurada o caída de Anthropic)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"El servicio de IA no está disponible en este momento: {str(e)}"
+        )
 
 
 # ---------------------------------------------------------------------------
