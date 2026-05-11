@@ -1,9 +1,8 @@
 import os
 from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI
+from langchain_anthropic import ChatAnthropic
 from langchain_community.utilities import SQLDatabase
 from langchain_community.agent_toolkits import create_sql_agent, SQLDatabaseToolkit
-import traceback
 
 # Cargar variables de entorno
 load_dotenv()
@@ -14,13 +13,12 @@ class PMOAssistant:
         db_path = os.path.join(os.getcwd(), "data", "pmo_rpa.db")
         self.db = SQLDatabase.from_uri(f"sqlite:///{db_path}")
         
-        # Inicialización del LLM (DeepSeek-V4-Flash)
-        self.llm = ChatOpenAI(
-            model="deepseek-chat",
-            base_url="https://api.deepseek.com/v1",
-            openai_api_key=os.getenv("LLM_API_KEY"),
+        # Inicialización del LLM (Claude 4.5 Haiku)
+        self.llm = ChatAnthropic(
+            model="claude-haiku-4-5-20251001",
             temperature=0,
-            max_tokens=1024
+            max_tokens=1024,
+            anthropic_api_key=os.getenv("ANTHROPIC_API_KEY")
         )
         
         # Herramientas para el agente SQL
@@ -40,17 +38,29 @@ class PMOAssistant:
             llm=self.llm,
             toolkit=self.toolkit,
             verbose=True,
-            agent_type="tool-calling",
+            agent_type="tool-calling", # O "openai-tools" / "zero-shot-react-description" dependiendo de la versión
             prefix=self.system_message
         )
 
     def ask_bot(self, question: str) -> str:
+        """
+        Ejecuta la consulta del usuario a través del agente LangChain.
+        """
         try:
+            # En versiones recientes de LangChain se usa invoke
             response = self.agent_executor.invoke({"input": question})
-            return str(response.get("output", "No se pudo generar una respuesta."))
+            output = response.get("output", "No se pudo generar una respuesta.")
+            
+            # Hotfix: Flatten output if it's a list (Claude 4.5 returns content blocks)
+            if isinstance(output, list):
+                output = "".join([
+                    item.get("text", "") if isinstance(item, dict) else str(item) 
+                    for item in output
+                ])
+                
+            return str(output)
         except Exception as e:
-            print(traceback.format_exc())
-            return f"Error al procesar la consulta: {type(e).__name__}: {str(e)}"
+            return f"Error al procesar la consulta: {str(e)}"
 
 # Instancia única para ser importada
 assistant = None
