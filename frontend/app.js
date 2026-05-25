@@ -769,7 +769,7 @@ function getAvatar(user) {
 async function fetchProjectComments(projectId, phaseId = null) {
     const listGroup = document.getElementById('comments-list');
     const btnShowAll = document.getElementById('btn-show-all-comments');
-    
+
     // Si hay phaseId, mostramos el botón de reset
     if (btnShowAll) btnShowAll.style.display = phaseId ? 'inline-block' : 'none';
 
@@ -797,7 +797,7 @@ async function fetchProjectComments(projectId, phaseId = null) {
         comments.forEach(comment => {
             const div = document.createElement('div');
             div.className = 'comment-item';
-            
+
             const dateStr = new Date(comment.created_at).toLocaleString('es-ES', {
                 day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
             });
@@ -828,17 +828,17 @@ async function fetchProjectComments(projectId, phaseId = null) {
 
 function resetCommentsFilter() {
     if (!currentGanttProjectId) return;
-    
+
     const badge = document.getElementById('selected-phase-badge');
     const container = document.getElementById('create-comment-container');
     const inputId = document.getElementById('comment-phase-id');
     const btnShowAll = document.getElementById('btn-show-all-comments');
-    
+
     if (badge) badge.style.display = 'none';
     if (container) container.style.display = 'none';
     if (inputId) inputId.value = '';
     if (btnShowAll) btnShowAll.style.display = 'none';
-    
+
     fetchProjectComments(currentGanttProjectId);
 }
 
@@ -1353,7 +1353,7 @@ async function handleUpdateProfile(e) {
         const updatedUser = await response.json();
         renderProfilePreview(updatedUser);
         alert('¡Perfil actualizado con éxito!');
-        
+
         document.getElementById('profile-password').value = '';
         fetchProjects();
     } catch (error) {
@@ -1425,7 +1425,20 @@ function addChatMessage(text, sender, isError = false) {
     if (isError) {
         div.classList.add('bg-danger', 'text-white');
     }
-    div.innerText = text;
+
+    // Aquí está la magia: si es el bot, usamos marked.parse() para crear la tabla HTML
+    if (sender === 'bot' && typeof marked !== 'undefined') {
+        div.innerHTML = marked.parse(text);
+
+        // Agregar clases de Bootstrap a las tablas generadas para que se vean bien
+        const tables = div.querySelectorAll('table');
+        tables.forEach(table => {
+            table.classList.add('table', 'table-sm', 'table-bordered', 'mt-2', 'bg-white');
+        });
+    } else {
+        // Si es el usuario, lo mantenemos como texto plano por seguridad
+        div.innerText = text;
+    }
 
     messagesContainer.appendChild(div);
     // Scroll al final
